@@ -1,4 +1,3 @@
-
 # 🚀 ORBIT — Offline Astronaut Health Monitoring System
 
 > **Analyze · Understand · Protect**  
