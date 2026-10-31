@@ -12,4 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# To'g'ridan-to'g'ri app papkasining ichiga kiramiz
+WORKDIR /app/app
+
+# Uvicorn o'rniga python main.py ni ishlatamiz (import muammosini 100% yo'qotadi)
+CMD ["python", "main.py"]

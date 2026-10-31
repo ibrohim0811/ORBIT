@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: orbit_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: orbit_user
+      POSTGRES_PASSWORD: orbit_password
+      POSTGRES_DB: orbit_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: orbit_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app:z
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://orbit_user:orbit_password@db:5432/orbit_db
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
