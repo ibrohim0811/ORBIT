@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 #routers
 from api.telemetry import router as telemetry
+from api.websocket import router as ws
 
 app = FastAPI(
     title="ORBIT - Space Health Monitoring System",
@@ -19,6 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(telemetry)
+app.include_router(ws)
 
 
 @app.get('/')

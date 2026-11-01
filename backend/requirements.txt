@@ -5,6 +5,7 @@ pydantic==2.13.5
 pydantic-settings==2.15.0
 python-dotenv==1.2.3
 requests==2.34.2
+httpx==0.28.1
 
 # Database & Migrations
 SQLAlchemy>=2.0.25,<2.1.0
