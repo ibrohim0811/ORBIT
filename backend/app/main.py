@@ -1,14 +1,27 @@
 from fastapi import FastAPI 
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 #routers
 from api.telemetry import router as telemetry
 from api.websocket import router as ws
+from api.simulator import router as simulator
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Server yoqilganda simulyatorni avtomatik ishga tushiramiz
+    simulator.start()
+    yield
+    # Server o'chganda simulyatorni to'xtatamiz
+    simulator.stop()
 
 app = FastAPI(
     title="ORBIT - Space Health Monitoring System",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
+
 
 # CORS sozlamalari (Frontend erkin murojaat qilishi uchun)
 app.add_middleware(
@@ -21,6 +34,7 @@ app.add_middleware(
 
 app.include_router(telemetry)
 app.include_router(ws)
+app.include_router(simulator)
 
 
 @app.get('/')

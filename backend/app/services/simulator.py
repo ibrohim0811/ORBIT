@@ -7,8 +7,14 @@ class TelemetrySimulator:
 
     def set_mode(self, mode: str):
         """Simulyatsiya rejimini o'zgartirish"""
-        if mode in ["normal", "warning", "critical"]:
-            self.mode = mode
+        # "storm" so'rovini ham qo'shamiz, u avtomatik ravishda "critical" rejimga o'tadi
+        if mode in ["normal", "warning", "critical", "storm"]:
+            if mode == "storm":
+                self.mode = "critical"
+            else:
+                self.mode = mode
+            return True
+        return False
 
     def generate_point(self) -> dict:
         """Joriy rejimga qarab telemetriya ma'lumotlarini ishlab chiqadi"""
