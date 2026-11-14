@@ -22,15 +22,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-<<<<<<< HEAD
-    title="ORBIT - Orbital Real-time Biomedical & Telemetry. ",
-    version="1.0.0",
-    lifespan=lifespan
-=======
     title="ORBIT - Space Health Monitoring System",
     version="1.1.0",
     lifespan=lifespan,
->>>>>>> eedeaccd4126333eb13c608ada36f5deb30a0081
 )
 
 ALLOWED_ORIGINS = [
