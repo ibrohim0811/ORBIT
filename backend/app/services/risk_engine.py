@@ -1,71 +1,98 @@
-class RiskEngine:
-    def __init__(self):
-        # Kumulyativ radiatsiya dozasi (mSv) - vaqt o'tishi bilan yigilib boradi
-        self.cumulative_radiation = 0.0
+"""Deterministik qoidalar va xavf byudjeti. Holat hisoblashda AI ishtirok etmaydi."""
+from core import thresholds as T
 
-    def evaluate(self, metrics: dict) -> dict:
-        hr = metrics.get("heart_rate", 75.0)
-        radiation = metrics.get("radiation_level", 0.1)
-        co2 = metrics.get("co2_level", 0.04)
-        sleep_debt = metrics.get("sleep_debt", 1.0)
+LEVEL_NAMES = ("NORMAL", "WARNING", "CRITICAL")
+LEVEL_VALUE = {name: i for i, name in enumerate(LEVEL_NAMES)}
 
-        # Kumulyativ radiatsiyani oshirib boramiz (har bir siklda qo'shiladi)
-        self.cumulative_radiation += radiation * 0.01
+# (rule_id, daraja, shart, xabar). Kritik qoidalar birinchi turadi.
+RULES = [
+    ("RULE_HR_CRITICAL", "CRITICAL", lambda p: p["heart_rate"] > T.HR_CRITICAL,
+     "Yurak urishi kritik darajada yuqori"),
+    ("RULE_RAD_CRITICAL", "CRITICAL", lambda p: p["radiation_level"] > T.RAD_CRITICAL,
+     "Radiatsiya xavfli darajada"),
+    ("RULE_CO2_CRITICAL", "CRITICAL", lambda p: p["co2_level"] > T.CO2_CRITICAL,
+     "Kabina havosida CO2 kritik darajada"),
+    ("RULE_HR_WARNING", "WARNING", lambda p: p["heart_rate"] > T.HR_WARNING,
+     "Yurak urishi tezlashgan"),
+    ("RULE_RAD_WARNING", "WARNING", lambda p: p["radiation_level"] > T.RAD_WARNING,
+     "Radiatsiya fonida o'sish"),
+    ("RULE_CO2_WARNING", "WARNING", lambda p: p["co2_level"] > T.CO2_WARNING,
+     "Kabina havosida CO2 ko'tarilgan"),
+    ("RULE_SLEEP_WARNING", "WARNING", lambda p: p["sleep_debt"] > T.SLEEP_DEBT_WARNING,
+     "Uyqu qarzi yig'ilgan"),
+]
 
-        # Xavf byudjeti komponentlari (0% - xavfsiz, 100% - o'ta xavfli)
-        # 1. Radiatsiya xavfi (masalan, 3.0 mSv dan yuqori bo'lsa critical)
-        radiation_risk = min(100.0, (radiation / 3.0) * 100)
-        
-        # 2. Yurak urishi xavfi (140 bpm dan yuqori bo'lsa 100%)
-        hr_risk = min(100.0, max(0.0, (hr - 60.0) / 80.0 * 100))
-        
-        # 3. CO2 xavfi (0.1% dan yuqori bo'lsa xavfli)
-        co2_risk = min(100.0, (co2 / 0.12) * 100)
-        
-        # 4. Uyqu qarzi xavfi (8 soatdan ko'p bo'lsa xavfli)
-        sleep_risk = min(100.0, (sleep_debt / 8.0) * 100)
 
-        # Umumiy o'rtacha xavf byudjeti balli
-        overall_risk_score = round(
-            (radiation_risk * 0.4) + (hr_risk * 0.3) + (co2_risk * 0.2) + (sleep_risk * 0.1), 1
-        )
+def classify_point(point: dict) -> str:
+    """Bitta namuna darajasi (tasdiqlanmagan)."""
+    worst = "NORMAL"
+    for _rid, level, cond, _msg in RULES:
+        if cond(point) and LEVEL_VALUE[level] > LEVEL_VALUE[worst]:
+            worst = level
+    return worst
 
-        # Qoidalar va tavsiyalar logikasi (Rule Engine)
+
+def triggered_rules(point: dict) -> list[tuple[str, str, str]]:
+    """Shu namuna uchun ishlagan qoidalar: (rule_id, daraja, xabar)."""
+    return [(rid, level, msg) for rid, level, cond, msg in RULES if cond(point)]
+
+
+def confirmed_status(current: str, recent_levels: list[str]) -> str:
+    """Holat faqat so'nggi CONFIRM_SAMPLES namuna HAMMASI bir xil yangi darajada bo'lsa o'zgaradi.
+    Aks holda avvalgi tasdiqlangan holat saqlanadi (tebranish va bitta sakrash ta'sir qilmaydi)."""
+    if len(recent_levels) < T.CONFIRM_SAMPLES:
+        return current
+    last = recent_levels[-T.CONFIRM_SAMPLES:]
+    if len(set(last)) == 1 and last[0] != current:
+        return last[0]
+    return current
+
+
+def compute_risk_budget(point: dict, cumulative_dose_msv: float) -> dict:
+    """Har komponent 0..100%. Umumiy ball — og'irlikli o'rtacha (T.BUDGET_WEIGHTS)."""
+    hr = point["heart_rate"]
+    radiation_risk = min(100.0, point["radiation_level"] / T.RAD_RISK_MAX * 100)
+    hr_risk = min(100.0, max(0.0, (hr - T.HR_RISK_LOW) / (T.HR_RISK_HIGH - T.HR_RISK_LOW) * 100))
+    co2_risk = min(100.0, point["co2_level"] / T.CO2_RISK_MAX * 100)
+    sleep_risk = min(100.0, point["sleep_debt"] / T.SLEEP_RISK_MAX * 100)
+    w = T.BUDGET_WEIGHTS
+    overall = (
+        radiation_risk * w["radiation"]
+        + hr_risk * w["heart_rate"]
+        + co2_risk * w["co2"]
+        + sleep_risk * w["sleep"]
+    )
+    return {
+        "overall_score": round(overall, 1),
+        "radiation_risk_pct": round(radiation_risk, 1),
+        "heart_rate_risk_pct": round(hr_risk, 1),
+        "co2_risk_pct": round(co2_risk, 1),
+        "sleep_risk_pct": round(sleep_risk, 1),
+        "cumulative_radiation_msv": round(cumulative_dose_msv, 6),
+        "formula": "overall = 0.4*radiation + 0.3*heart_rate + 0.2*co2 + 0.1*sleep (each 0..100)",
+    }
+
+
+ACTIONS = {
+    "CRITICAL": "Darhol himoyalangan yotoqxonaga o'ting va radiatsiya qalqonini tekshiring.",
+    "WARNING": "Aerobik yuklamani kamaytiring, dam oling va havo almashtirishni tekshiring.",
+    "NORMAL": "Kuzatishni davom ettiring.",
+    "STALE": "Sensor ma'lumoti yangilanmagan. Bu holat NORMAL emas: ma'lumot oqimini tekshiring.",
+}
+
+
+def recommendation(status: str, rules: list[tuple[str, str, str]], reasons: list[str]) -> dict:
+    """Tavsiya: qaysi qoida ishlagani va sababi bilan."""
+    primary = next((rid for rid, level, _ in rules if level == status), None)
+    if status == "STALE":
+        rule_id = "RULE_STALE"
+    elif status == "NORMAL":
         rule_id = "RULE_NORMAL"
-        status = "NORMAL"
-        action = "Kuzatishni davom ettirish"
-        reason = "Barcha ko'rsatkichlar nominal chegarada."
-        confidence = "98.5%"
-
-        if radiation_risk > 70.0 or hr > 130.0:
-            rule_id = "RULE_SOLAR_STORM_CRITICAL"
-            status = "CRITICAL"
-            action = "Zudlik bilan kabinaning radiatsiyadan himoyalangan sektoriga o'ting!"
-            reason = f"Kritik radiatsiya ({radiation} mSv/s) yoki yurak urishi ({hr} bpm) aniqlandi."
-            confidence = "99.1%"
-        elif radiation_risk > 30.0 or hr > 100.0 or co2 > 0.07:
-            rule_id = "RULE_WARNING_ELEVATED"
-            status = "WARNING"
-            action = "Dam oling va havo almashtirish tizimini tekshiring."
-            reason = "Ko'rsatkichlarda me'yordan og'ish boshlandi."
-            confidence = "95.0%"
-
-        return {
-            "status": status,
-            "risk_budget": {
-                "overall_score": overall_risk_score,
-                "radiation_risk_pct": round(radiation_risk, 1),
-                "heart_rate_risk_pct": round(hr_risk, 1),
-                "co2_risk_pct": round(co2_risk, 1),
-                "sleep_risk_pct": round(sleep_risk, 1),
-                "cumulative_radiation_msv": round(self.cumulative_radiation, 3)
-            },
-            "recommendation": {
-                "rule_id": rule_id,
-                "action": action,
-                "reason": reason,
-                "confidence": confidence
-            }
-        }
-
-risk_engine = RiskEngine()
+    else:
+        rule_id = primary or f"RULE_{status}_CONFIRMED"
+    return {
+        "rule_id": rule_id,
+        "action": ACTIONS[status],
+        "reason": "; ".join(reasons) if reasons else "Barcha ko'rsatkichlar me'yorda.",
+        "confidence": "RULE_BASED",
+    }

@@ -47,4 +47,7 @@ yarn-error.log*
 *.tmp
 *.temp
 
-first-public-login-1dfc7d602759.json
+first-public-login-1dfc7d602759.json__pycache__/
+*.pyc
+.env
+.venv/
