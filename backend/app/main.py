@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     simulator.stop()
 
 app = FastAPI(
-    title="ORBIT - Space Health Monitoring System",
+    title="ORBIT - Orbital Real-time Biomedical & Telemetry. ",
     version="1.0.0",
     lifespan=lifespan
 )
