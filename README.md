@@ -1,4 +1,5 @@
-# 🚀 ORBIT — Offline Astronaut Health Monitoring System
+# 🚀 ORBIT — Orbital Real-time Biomedical & Telemetry. 
+# Offline Astronaut Health Monitoring System
 
 > **Analyze · Understand · Protect**  
 > An offline-first health-monitoring prototype designed to support astronaut crews throughout a space mission.
