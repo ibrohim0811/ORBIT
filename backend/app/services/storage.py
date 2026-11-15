@@ -20,6 +20,12 @@ CREATE TABLE IF NOT EXISTS samples (
     radiation_level REAL NOT NULL,
     co2_level REAL NOT NULL,
     sleep_debt REAL NOT NULL,
+    blood_glucose_mgdl REAL NOT NULL DEFAULT 95.0,
+    body_temp_c REAL NOT NULL DEFAULT 36.8,
+    sleep_hours_last_night REAL NOT NULL DEFAULT 8.0,
+    mood INTEGER DEFAULT 4,
+    blood_sugar REAL NOT NULL DEFAULT 95.0,
+    body_temperature REAL NOT NULL DEFAULT 36.8,
     dose_msv REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_samples_crew ON samples(crew_id, received_at);
@@ -36,6 +42,8 @@ CREATE TABLE IF NOT EXISTS checkins (
     crew_id TEXT NOT NULL,
     status TEXT NOT NULL,
     note TEXT NOT NULL,
+    mood INTEGER DEFAULT 4,
+    symptoms TEXT DEFAULT '',
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_checkins_crew ON checkins(crew_id, created_at);
@@ -55,11 +63,112 @@ CREATE TABLE IF NOT EXISTS sync_marks (
     last_sync_at REAL NOT NULL,
     last_synced_count INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS crew_gamification (
+    crew_id TEXT PRIMARY KEY,
+    streak_days INTEGER NOT NULL DEFAULT 1,
+    total_points INTEGER NOT NULL DEFAULT 100,
+    last_completed_date TEXT
+);
+CREATE TABLE IF NOT EXISTS crew_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    crew_id TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    category TEXT NOT NULL,
+    points INTEGER NOT NULL DEFAULT 20,
+    completed INTEGER NOT NULL DEFAULT 0,
+    date_key TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_crew_task_unique ON crew_tasks(crew_id, task_id, date_key);
+CREATE TABLE IF NOT EXISTS crew_badges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    crew_id TEXT NOT NULL,
+    badge_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    icon TEXT NOT NULL,
+    unlocked_at REAL NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_crew_badge_unique ON crew_badges(crew_id, badge_id);
 """
 
 SAMPLE_COLUMNS = (
-    "heart_rate", "blood_pressure_sys", "radiation_level", "co2_level", "sleep_debt", "dose_msv"
+    "heart_rate", "blood_pressure_sys", "radiation_level", "co2_level", "sleep_debt",
+    "blood_glucose_mgdl", "body_temp_c", "sleep_hours_last_night", "mood",
+    "blood_sugar", "body_temperature", "dose_msv"
 )
+
+DEFAULT_TASKS = [
+    {
+        "task_id": "task_exercise",
+        "title": "2.5 soat trenajyor",
+        "description": "T2 Treadmill & ARED kuch mashqlari (suyak/mushak profilaktikasi)",
+        "category": "fitness",
+        "points": 30,
+    },
+    {
+        "task_id": "task_hydration",
+        "title": "Suv balansi",
+        "description": "2.5L ionlashtirilgan suv iste'moli va elektrolit nazorati",
+        "category": "hydration",
+        "points": 20,
+    },
+    {
+        "task_id": "task_checkin",
+        "title": "Kunlik tibbiy check-in",
+        "description": "Sog'liq va ruhiy holat bo'yicha rasmiy hisobot",
+        "category": "health",
+        "points": 25,
+    },
+    {
+        "task_id": "task_sleep",
+        "title": "8 soat optimal uyqu",
+        "description": "Sirkad ritm va kognitiv dam olish tsikli",
+        "category": "recovery",
+        "points": 25,
+    },
+    {
+        "task_id": "task_radiation",
+        "title": "Radiatsiya nazorati",
+        "description": "Shaxsiy dozimetr va modul qalqonlarini ko'rikdan o'tkazish",
+        "category": "safety",
+        "points": 15,
+    },
+]
+
+ALL_BADGES = [
+    {
+        "badge_id": "rad_shield",
+        "title": "Radiation Shield Master",
+        "description": "Radiatsiya foni va dozimetriya doimiy nazoratda",
+        "icon": "Shield",
+    },
+    {
+        "badge_id": "hydration_hero",
+        "title": "Hydration Hero",
+        "description": "Kunlik suv balansi va elektrolit me'yori to'liq bajarildi",
+        "icon": "Droplets",
+    },
+    {
+        "badge_id": "sleep_guardian",
+        "title": "Sleep Guardian",
+        "description": "Uyqu gigiyenasi saqlangan, uyqu qarzi minimal",
+        "icon": "Moon",
+    },
+    {
+        "badge_id": "fitness_commander",
+        "title": "Fitness Commander",
+        "description": "2.5 soatlik kosmik trenajyor mashqlari muvaffaqiyatli yakunlandi",
+        "icon": "Flame",
+    },
+    {
+        "badge_id": "streak_master",
+        "title": "Orbit Pioneer (Streak)",
+        "description": "Ketma-ket 5 kunlik barcha vazifalar a'lo darajada bajarildi",
+        "icon": "Award",
+    },
+]
 
 
 class Storage:
@@ -75,16 +184,50 @@ class Storage:
             pass
         self._conn.executescript(SCHEMA + SCHEMA_EXTRA)
 
+        # Dinamik ustunlar migratsiyasi (mavjud orbit.db ni buzmaslik uchun)
+        sample_migrations = [
+            ("blood_glucose_mgdl", "REAL NOT NULL DEFAULT 95.0"),
+            ("body_temp_c", "REAL NOT NULL DEFAULT 36.8"),
+            ("sleep_hours_last_night", "REAL NOT NULL DEFAULT 8.0"),
+            ("mood", "INTEGER DEFAULT 4"),
+            ("blood_sugar", "REAL NOT NULL DEFAULT 95.0"),
+            ("body_temperature", "REAL NOT NULL DEFAULT 36.8"),
+        ]
+        for col, col_def in sample_migrations:
+            try:
+                self._conn.execute(f"ALTER TABLE samples ADD COLUMN {col} {col_def};")
+            except Exception:
+                pass
+
+        checkin_migrations = [
+            ("mood", "INTEGER DEFAULT 4"),
+            ("symptoms", "TEXT DEFAULT ''"),
+        ]
+        for col, col_def in checkin_migrations:
+            try:
+                self._conn.execute(f"ALTER TABLE checkins ADD COLUMN {col} {col_def};")
+            except Exception:
+                pass
+
     def insert_sample(self, event_id, crew_id, mission_id, received_at, point) -> bool:
         """True: yangi yozildi. False: bu event_id avval bo'lgan (duplicate)."""
+        glucose = float(point.get("blood_glucose_mgdl", point.get("blood_sugar", 95.0)))
+        temp = float(point.get("body_temp_c", point.get("body_temperature", 36.8)))
+        sleep_hours = float(point.get("sleep_hours_last_night", 8.0))
+        mood = point.get("mood")
         with self._lock:
             cur = self._conn.execute(
                 "INSERT OR IGNORE INTO samples (event_id, crew_id, mission_id, received_at, "
-                "heart_rate, blood_pressure_sys, radiation_level, co2_level, sleep_debt, dose_msv) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "heart_rate, blood_pressure_sys, radiation_level, co2_level, sleep_debt, "
+                "blood_glucose_mgdl, body_temp_c, sleep_hours_last_night, mood, "
+                "blood_sugar, body_temperature, dose_msv) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (event_id, crew_id, mission_id, received_at,
                  point["heart_rate"], point["blood_pressure_sys"], point["radiation_level"],
-                 point["co2_level"], point["sleep_debt"], point["dose_msv"]),
+                 point["co2_level"], point["sleep_debt"],
+                 glucose, temp, sleep_hours, mood,
+                 glucose, temp,
+                 point["dose_msv"]),
             )
             self._conn.commit()
             return cur.rowcount == 1
@@ -128,12 +271,13 @@ class Storage:
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def add_checkin(self, crew_id: str, status: str, note: str) -> float:
+    def add_checkin(self, crew_id: str, status: str, note: str, mood: int | None = None, symptoms: list[str] | str | None = None) -> float:
         now = time.time()
+        symptoms_str = ",".join(symptoms) if isinstance(symptoms, list) else (symptoms or "")
         with self._lock:
             self._conn.execute(
-                "INSERT INTO checkins (crew_id, status, note, created_at) VALUES (?,?,?,?)",
-                (crew_id, status, note, now),
+                "INSERT INTO checkins (crew_id, status, note, mood, symptoms, created_at) VALUES (?,?,?,?,?,?)",
+                (crew_id, status, note, mood if mood is not None else 4, symptoms_str, now),
             )
             self._conn.commit()
         return now
@@ -141,10 +285,18 @@ class Storage:
     def last_checkin(self, crew_id: str) -> dict | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT status, note, created_at FROM checkins WHERE crew_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+                "SELECT status, note, mood, symptoms, created_at FROM checkins WHERE crew_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
                 (crew_id,),
             ).fetchone()
         return dict(row) if row else None
+
+    def recent_checkins(self, crew_id: str, limit: int = 10) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT status, note, mood, symptoms, created_at FROM checkins WHERE crew_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+                (crew_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def add_note(self, crew_id: str, author: str, text: str) -> dict:
         now = time.time()
@@ -199,7 +351,9 @@ class Storage:
 
     def history(self, crew_id: str, since: float | None, limit: int,
                 hr_min: float | None, hr_max: float | None, rad_min: float | None) -> list[dict]:
-        sql = "SELECT event_id, received_at, heart_rate, blood_pressure_sys, radiation_level, co2_level, sleep_debt FROM samples WHERE crew_id = ?"
+        sql = ("SELECT event_id, received_at, heart_rate, blood_pressure_sys, radiation_level, "
+               "co2_level, sleep_debt, blood_glucose_mgdl, body_temp_c, sleep_hours_last_night, mood, "
+               "blood_sugar, body_temperature FROM samples WHERE crew_id = ?")
         args: list = [crew_id]
         if since is not None:
             sql += " AND received_at >= ?"; args.append(since)
@@ -218,7 +372,9 @@ class Storage:
     def latest_sample(self, crew_id: str) -> dict | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT heart_rate, blood_pressure_sys, radiation_level, co2_level, sleep_debt, received_at "
+                "SELECT heart_rate, blood_pressure_sys, radiation_level, co2_level, sleep_debt, "
+                "blood_glucose_mgdl, body_temp_c, sleep_hours_last_night, mood, "
+                "blood_sugar, body_temperature, received_at "
                 "FROM samples WHERE crew_id = ? ORDER BY received_at DESC, rowid DESC LIMIT 1",
                 (crew_id,),
             ).fetchone()
@@ -253,9 +409,191 @@ class Storage:
             self._conn.commit()
         return now
 
+    def get_gamification_state(self, crew_id: str) -> dict:
+        today_key = time.strftime("%Y-%m-%d", time.gmtime())
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT streak_days, total_points, last_completed_date FROM crew_gamification WHERE crew_id = ?",
+                (crew_id,),
+            ).fetchone()
+            if not row:
+                self._conn.execute(
+                    "INSERT INTO crew_gamification (crew_id, streak_days, total_points, last_completed_date) "
+                    "VALUES (?, 5, 240, ?)",
+                    (crew_id, today_key),
+                )
+                self._conn.commit()
+                streak_days = 5
+                total_points = 240
+            else:
+                streak_days = int(row["streak_days"])
+                total_points = int(row["total_points"])
+
+            task_rows = self._conn.execute(
+                "SELECT task_id, title, description, category, points, completed FROM crew_tasks "
+                "WHERE crew_id = ? AND date_key = ? ORDER BY id ASC",
+                (crew_id, today_key),
+            ).fetchall()
+
+            if not task_rows:
+                for dt in DEFAULT_TASKS:
+                    self._conn.execute(
+                        "INSERT OR IGNORE INTO crew_tasks (crew_id, task_id, title, description, category, points, completed, date_key) "
+                        "VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+                        (crew_id, dt["task_id"], dt["title"], dt["description"], dt["category"], dt["points"], today_key),
+                    )
+                self._conn.commit()
+                task_rows = self._conn.execute(
+                    "SELECT task_id, title, description, category, points, completed FROM crew_tasks "
+                    "WHERE crew_id = ? AND date_key = ? ORDER BY id ASC",
+                    (crew_id, today_key),
+                ).fetchall()
+
+            tasks = [
+                {
+                    "task_id": r["task_id"],
+                    "title": r["title"],
+                    "description": r["description"],
+                    "category": r["category"],
+                    "points": int(r["points"]),
+                    "completed": bool(r["completed"]),
+                }
+                for r in task_rows
+            ]
+
+            unlocked_rows = self._conn.execute(
+                "SELECT badge_id, unlocked_at FROM crew_badges WHERE crew_id = ?",
+                (crew_id,),
+            ).fetchall()
+            unlocked_map = {r["badge_id"]: r["unlocked_at"] for r in unlocked_rows}
+
+            if not unlocked_map:
+                now_ts = time.time()
+                for bid in ("rad_shield", "hydration_hero"):
+                    self._conn.execute(
+                        "INSERT OR IGNORE INTO crew_badges (crew_id, badge_id, title, description, icon, unlocked_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (crew_id, bid, next(b["title"] for b in ALL_BADGES if b["badge_id"] == bid),
+                         next(b["description"] for b in ALL_BADGES if b["badge_id"] == bid),
+                         next(b["icon"] for b in ALL_BADGES if b["badge_id"] == bid),
+                         now_ts),
+                    )
+                self._conn.commit()
+                unlocked_rows = self._conn.execute(
+                    "SELECT badge_id, unlocked_at FROM crew_badges WHERE crew_id = ?",
+                    (crew_id,),
+                ).fetchall()
+                unlocked_map = {r["badge_id"]: r["unlocked_at"] for r in unlocked_rows}
+
+            badges = [
+                {
+                    **b,
+                    "unlocked": b["badge_id"] in unlocked_map,
+                    "unlocked_at": unlocked_map.get(b["badge_id"]),
+                }
+                for b in ALL_BADGES
+            ]
+
+        completed_count = sum(1 for t in tasks if t["completed"])
+        return {
+            "crew_id": crew_id,
+            "streak_days": streak_days,
+            "total_points": total_points,
+            "date": today_key,
+            "tasks_completed": completed_count,
+            "tasks_total": len(tasks),
+            "tasks": tasks,
+            "badges": badges,
+        }
+
+    def toggle_task(self, crew_id: str, task_id: str, completed: bool) -> dict:
+        today_key = time.strftime("%Y-%m-%d", time.gmtime())
+        with self._lock:
+            # Ensure today's tasks exist first
+            existing = self._conn.execute(
+                "SELECT id FROM crew_tasks WHERE crew_id = ? AND task_id = ? AND date_key = ?",
+                (crew_id, task_id, today_key),
+            ).fetchone()
+            if not existing:
+                for dt in DEFAULT_TASKS:
+                    self._conn.execute(
+                        "INSERT OR IGNORE INTO crew_tasks (crew_id, task_id, title, description, category, points, completed, date_key) "
+                        "VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+                        (crew_id, dt["task_id"], dt["title"], dt["description"], dt["category"], dt["points"], today_key),
+                    )
+
+            self._conn.execute(
+                "UPDATE crew_tasks SET completed = ? WHERE crew_id = ? AND task_id = ? AND date_key = ?",
+                (1 if completed else 0, crew_id, task_id, today_key),
+            )
+
+            row = self._conn.execute(
+                "SELECT points FROM crew_tasks WHERE crew_id = ? AND task_id = ? AND date_key = ?",
+                (crew_id, task_id, today_key),
+            ).fetchone()
+            pts = int(row["points"]) if row else 20
+            delta = pts if completed else -pts
+
+            self._conn.execute(
+                "UPDATE crew_gamification SET total_points = MAX(0, total_points + ?) WHERE crew_id = ?",
+                (delta, crew_id),
+            )
+
+            all_rows = self._conn.execute(
+                "SELECT completed FROM crew_tasks WHERE crew_id = ? AND date_key = ?",
+                (crew_id, today_key),
+            ).fetchall()
+            all_done = bool(all_rows) and all(bool(r["completed"]) for r in all_rows)
+            if all_done:
+                self._conn.execute(
+                    "UPDATE crew_gamification SET streak_days = streak_days + 1, last_completed_date = ? "
+                    "WHERE crew_id = ? AND last_completed_date != ?",
+                    (today_key, crew_id, today_key),
+                )
+                now_ts = time.time()
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO crew_badges (crew_id, badge_id, title, description, icon, unlocked_at) "
+                    "VALUES (?, 'streak_master', 'Orbit Pioneer (Streak)', 'Ketma-ket barcha vazifalar yakunlandi', 'Award', ?)",
+                    (crew_id, now_ts),
+                )
+
+            if completed:
+                now_ts = time.time()
+                badge_map = {
+                    "task_exercise": ("fitness_commander", "Fitness Commander", "Trenajyor mashqlari bajarildi", "Flame"),
+                    "task_hydration": ("hydration_hero", "Hydration Hero", "Suv balansi bajarildi", "Droplets"),
+                    "task_sleep": ("sleep_guardian", "Sleep Guardian", "Uyqu davri saqlangan", "Moon"),
+                    "task_radiation": ("rad_shield", "Radiation Shield Master", "Radiatsiya nazorati bajarildi", "Shield"),
+                }
+                if task_id in badge_map:
+                    bid, title, desc, icon = badge_map[task_id]
+                    self._conn.execute(
+                        "INSERT OR IGNORE INTO crew_badges (crew_id, badge_id, title, description, icon, unlocked_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (crew_id, bid, title, desc, icon, now_ts),
+                    )
+
+            self._conn.commit()
+
+        return self.get_gamification_state(crew_id)
+
+    def reset_gamification(self, crew_id: str) -> dict:
+        today_key = time.strftime("%Y-%m-%d", time.gmtime())
+        with self._lock:
+            self._conn.execute("DELETE FROM crew_tasks WHERE crew_id = ?", (crew_id,))
+            self._conn.execute("DELETE FROM crew_badges WHERE crew_id = ?", (crew_id,))
+            self._conn.execute(
+                "INSERT INTO crew_gamification (crew_id, streak_days, total_points, last_completed_date) "
+                "VALUES (?, 5, 240, ?) "
+                "ON CONFLICT(crew_id) DO UPDATE SET streak_days = 5, total_points = 240, last_completed_date = ?",
+                (crew_id, today_key, today_key),
+            )
+            self._conn.commit()
+        return self.get_gamification_state(crew_id)
+
     def clear(self) -> None:
         """Faqat testlar uchun."""
         with self._lock:
-            for table in ("samples", "events", "checkins", "notes", "sync_marks"):
+            for table in ("samples", "events", "checkins", "notes", "sync_marks", "crew_gamification", "crew_tasks", "crew_badges"):
                 self._conn.execute(f"DELETE FROM {table}")
             self._conn.commit()

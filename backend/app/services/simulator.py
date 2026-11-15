@@ -34,11 +34,24 @@ class TelemetrySimulator:
     def generate_point(self, crew_id: str | None = None) -> dict:
         timestamp = datetime.now(timezone.utc).isoformat()
         if self.mode == "normal":
-            ranges = dict(hr=(65, 85), bp=(110, 125), rad=(0.05, 0.3), co2=(0.03, 0.05), sleep=(0.0, 2.0))
+            ranges = dict(
+                hr=(65, 85), bp=(110, 125), rad=(0.05, 0.3), co2=(0.03, 0.05), sleep=(0.0, 2.0),
+                glucose=(80.0, 105.0), temp=(36.5, 37.2), sleep_hours=(7.5, 8.5), mood=(4, 5)
+            )
         elif self.mode == "warning":
-            ranges = dict(hr=(95, 115), bp=(130, 145), rad=(1.0, 1.8), co2=(0.06, 0.09), sleep=(4.0, 6.0))
+            ranges = dict(
+                hr=(95, 115), bp=(130, 145), rad=(1.0, 1.8), co2=(0.06, 0.09), sleep=(4.0, 6.0),
+                glucose=(142.0, 160.0), temp=(37.8, 38.4), sleep_hours=(4.5, 5.8), mood=(2, 3)
+            )
         else:
-            ranges = dict(hr=(125, 150), bp=(150, 175), rad=(2.2, 4.5), co2=(0.1, 0.15), sleep=(6.0, 10.0))
+            ranges = dict(
+                hr=(125, 150), bp=(150, 175), rad=(2.2, 4.5), co2=(0.1, 0.15), sleep=(6.0, 10.0),
+                glucose=(252.0, 290.0), temp=(39.1, 40.0), sleep_hours=(2.0, 4.0), mood=(1, 2)
+            )
+        glucose_val = round(random.uniform(*ranges["glucose"]), 1)
+        temp_val = round(random.uniform(*ranges["temp"]), 1)
+        sleep_hours_val = round(random.uniform(*ranges["sleep_hours"]), 1)
+        mood_val = random.randint(ranges["mood"][0], ranges["mood"][1])
         return {
             "timestamp": timestamp,
             "crew_id": crew_id or self.crew_id,
@@ -47,6 +60,13 @@ class TelemetrySimulator:
             "radiation_level": round(random.uniform(*ranges["rad"]), 3),
             "co2_level": round(random.uniform(*ranges["co2"]), 3),
             "sleep_debt": round(random.uniform(*ranges["sleep"]), 1),
+            "blood_glucose_mgdl": glucose_val,
+            "body_temp_c": temp_val,
+            "sleep_hours_last_night": sleep_hours_val,
+            "mood": mood_val,
+            # Orqaga moslik (Aliases)
+            "blood_sugar": glucose_val,
+            "body_temperature": temp_val,
         }
 
     async def _run(self) -> None:

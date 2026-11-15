@@ -28,6 +28,10 @@ Asosiy manzil: `http://localhost:8000`. Ma'lumotlar **simulyatsiya** (prototip) 
 | radiation_level | 0–10 | mSv/h |
 | co2_level | 0–5 | % |
 | sleep_debt | 0–24 | soat |
+| blood_glucose_mgdl | 20–600 | mg/dL (qon shakari, alias `blood_sugar`) |
+| body_temp_c | 30–43 | °C (tana harorati, alias `body_temperature`) |
+| sleep_hours_last_night | 0–16 | soat (o'tgan kechadagi uyqu) |
+| mood | 1–5 | ball (1=juda yomon, 5=a'lo) |
 
 Chegaradan tashqari yoki manfiy qiymat `422` qaytaradi. Javob: `{"status": "accepted"|"duplicate", ...}`.
 
@@ -95,6 +99,9 @@ Ikonkalar tartibi bo'yicha: Notes/Logs, Search, Dashboard, Crew Communication, D
 | Data Sync | POST | `/sync?crew_id=` | Yer stansiyasiga yuborish. LOS bo'lsa `deferred` (navbatda qoladi) |
 | Data Sync | GET | `/sync/status?crew_id=` | Aloqa holati, navbatdagi namunalar, oxirgi sinxronizatsiya |
 | Crew Communication | POST | `/chat?crew_id=` | `{message}` yuboriladi. Javobni Ollama beradi, o'chiq bo'lsa `rule_fallback` |
+| Gamification | GET | `/gamification?crew_id=` | Kunlik vazifalar, ball, streak, nishonlar |
+| Gamification | POST | `/gamification/tasks/{task_id}/toggle?crew_id=` | Vazifa holatini o'zgartirish |
+| Gamification | POST | `/gamification/reset?crew_id=` | Gamifikatsiya holatini qayta tiklash |
 | Header (AI Engine) | GET | `/ai/status` | Ollama holati: `Active` yoki `Offline` |
 
 Ollama sozlamalari: `OLLAMA_URL` (standart `http://localhost:11434`), `OLLAMA_MODEL` (standart `llama3`).

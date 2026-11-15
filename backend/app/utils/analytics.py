@@ -31,12 +31,22 @@ class TelemetryAnalyzer:
         self.confirmed_level = "NORMAL"
 
     def build_point(self, data: dict) -> dict:
+        glucose = float(data.get("blood_glucose_mgdl", data.get("blood_sugar", 95.0)))
+        temp = float(data.get("body_temp_c", data.get("body_temperature", 36.8)))
+        sleep_hours = float(data.get("sleep_hours_last_night", 8.0))
+        mood = data.get("mood")
         point = {
             "heart_rate": float(data.get("heart_rate", 75.0)),
             "blood_pressure_sys": float(data.get("blood_pressure_sys", 120.0)),
             "radiation_level": float(data.get("radiation_level", 0.1)),  # mSv/h
             "co2_level": float(data.get("co2_level", 0.04)),            # %
             "sleep_debt": float(data.get("sleep_debt", 0.0)),           # soat
+            "blood_glucose_mgdl": glucose,
+            "body_temp_c": temp,
+            "sleep_hours_last_night": sleep_hours,
+            "mood": int(mood) if mood is not None else 4,
+            "blood_sugar": glucose,
+            "body_temperature": temp,
         }
         point["dose_msv"] = point["radiation_level"] * T.SAMPLE_INTERVAL_H
         point["level"] = classify_point(point)
@@ -101,6 +111,12 @@ class TelemetryAnalyzer:
                 "cumulative_radiation_dose": round(self.cumulative_dose_msv, 6),
                 "current_co2": round(latest["co2_level"], 3),
                 "sleep_debt_hours": round(latest["sleep_debt"], 2),
+                "current_blood_glucose_mgdl": round(latest.get("blood_glucose_mgdl", latest.get("blood_sugar", 95.0)), 1),
+                "current_body_temp_c": round(latest.get("body_temp_c", latest.get("body_temperature", 36.8)), 1),
+                "sleep_hours_last_night": round(latest.get("sleep_hours_last_night", 8.0), 1),
+                "current_mood": latest.get("mood", 4),
+                "current_blood_sugar": round(latest.get("blood_sugar", 95.0), 1),
+                "current_body_temperature": round(latest.get("body_temperature", 36.8), 1),
             },
             "system_status": status,
             "pending_status": None if stale else latest["level"],

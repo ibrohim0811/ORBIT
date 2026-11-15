@@ -37,6 +37,12 @@ async def dashboard(crew_id: str = Query(T.DEFAULT_CREW_ID)):
             "radiation_level": last_sample["radiation_level"] if last_sample else None,
             "co2_level": last_sample["co2_level"] if last_sample else None,
             "sleep_debt": last_sample["sleep_debt"] if last_sample else None,
+            "blood_glucose_mgdl": last_sample["blood_glucose_mgdl"] if last_sample and "blood_glucose_mgdl" in last_sample else (last_sample.get("blood_sugar") if last_sample else None),
+            "body_temp_c": last_sample["body_temp_c"] if last_sample and "body_temp_c" in last_sample else (last_sample.get("body_temperature") if last_sample else None),
+            "sleep_hours_last_night": last_sample["sleep_hours_last_night"] if last_sample and "sleep_hours_last_night" in last_sample else (8.0 if last_sample else None),
+            "mood": last_sample.get("mood") if last_sample else None,
+            "blood_sugar": last_sample.get("blood_sugar") if last_sample else None,
+            "body_temperature": last_sample.get("body_temperature") if last_sample else None,
             "received_at": iso(last_sample["received_at"]) if last_sample else None,
         },
         "risk_budget": stats["risk_budget"] if stats else None,
@@ -73,7 +79,13 @@ async def telemetry_history(
     return {"crew_id": crew_id, "count": len(rows),
             "samples": [{"event_id": r["event_id"], "at": iso(r["received_at"]), "heart_rate": r["heart_rate"],
                          "blood_pressure_sys": r["blood_pressure_sys"], "radiation_level": r["radiation_level"],
-                         "co2_level": r["co2_level"], "sleep_debt": r["sleep_debt"]} for r in rows]}
+                         "co2_level": r["co2_level"], "sleep_debt": r["sleep_debt"],
+                         "blood_glucose_mgdl": r.get("blood_glucose_mgdl", r.get("blood_sugar", 95.0)),
+                         "blood_sugar": r.get("blood_glucose_mgdl", r.get("blood_sugar", 95.0)),
+                         "body_temp_c": r.get("body_temp_c", r.get("body_temperature", 36.8)),
+                         "body_temperature": r.get("body_temp_c", r.get("body_temperature", 36.8)),
+                         "sleep_hours_last_night": r.get("sleep_hours_last_night", 7.0),
+                         "mood": r.get("mood", 4)} for r in rows]}
 
 
 # ---------- Notes / Logs (Notes ikonkasi) ----------
@@ -139,3 +151,28 @@ async def chat(body: ChatInput, crew_id: str = Query(T.DEFAULT_CREW_ID)):
         return {"crew_id": crew_id, "source": "rule_fallback", "engine": engine_status,
                 "answer": ai.fallback_answer(stats)}
     return {"crew_id": crew_id, "source": "ollama", "engine": engine_status, "answer": answer}
+
+
+# ---------- Gamification & Streak System ----------
+class TaskToggleInput(BaseModel):
+    crew_id: str = Field(T.DEFAULT_CREW_ID, min_length=1, max_length=64)
+    task_id: str = Field(..., min_length=1, max_length=64)
+    completed: bool = Field(...)
+
+
+@router.get("/gamification")
+async def get_gamification(crew_id: str = Query(T.DEFAULT_CREW_ID)):
+    """Astronavtning kunlik vazifalari, streak va erishilgan nishonlar holati."""
+    return state.storage.get_gamification_state(crew_id)
+
+
+@router.post("/gamification/task/toggle")
+async def toggle_task(body: TaskToggleInput):
+    """Kunlik vazifani bajarilgan yoki bajarilmagan deb belgilash."""
+    return state.storage.toggle_task(body.crew_id, body.task_id, body.completed)
+
+
+@router.post("/gamification/reset")
+async def reset_gamification(crew_id: str = Query(T.DEFAULT_CREW_ID)):
+    """Geymifikatsiya ma'lumotlarini demo yoki test uchun qayta o'rnatish."""
+    return state.storage.reset_gamification(crew_id)
