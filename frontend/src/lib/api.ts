@@ -129,6 +129,12 @@ export interface ChatResponse {
   answer: string;
 }
 
+export interface AiStatusResponse {
+  engine: string;
+  state: "Active" | "Offline";
+  model_available?: boolean;
+}
+
 export interface TelemetryInput {
   crew_id?: string;
   mission_id?: string;
@@ -291,20 +297,48 @@ export async function sendChatMessage(
   crewId = "CREW-1",
   message: string
 ): Promise<ChatResponse> {
-  return request<ChatResponse>(`/chat?crew_id=${encodeURIComponent(crewId)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
-  }, 10000); // 10s for LLM response
+  const raw = await request<any>(
+    `/chat?crew_id=${encodeURIComponent(crewId)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    },
+    10000 // 10s for LLM response
+  );
+
+  let engineStr = "Ollama LLaMA-3";
+  if (typeof raw.engine === "string") {
+    engineStr = raw.engine;
+  } else if (raw.engine && typeof raw.engine === "object") {
+    engineStr = `${raw.engine.engine || "Ollama"} (${raw.engine.state || "Active"})`;
+  }
+
+  return {
+    crew_id: raw.crew_id || crewId,
+    source: raw.source || "rule_fallback",
+    engine: engineStr,
+    answer: raw.answer || "",
+  };
 }
 
 // 9. AI Status API
-export async function fetchAiStatus(): Promise<string> {
+export async function fetchAiStatus(): Promise<AiStatusResponse> {
   try {
-    const res = await request<string>("/ai/status");
-    return res;
+    const res = await request<any>("/ai/status");
+    if (typeof res === "object" && res !== null) {
+      return {
+        engine: res.engine || "Ollama LLaMA-3",
+        state: res.state === "Active" ? "Active" : "Offline",
+        model_available: Boolean(res.model_available),
+      };
+    }
+    return {
+      engine: "Ollama LLaMA-3",
+      state: String(res).includes("Offline") ? "Offline" : "Active",
+    };
   } catch {
-    return "Offline (Edge Fallback)";
+    return { engine: "Ollama LLaMA-3", state: "Offline" };
   }
 }
 
