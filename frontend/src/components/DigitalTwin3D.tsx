@@ -9,6 +9,14 @@ interface DigitalTwin3DProps {
 
 export default function DigitalTwin3D({ heartRate, isAnomaly }: DigitalTwin3DProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const heartRateRef = useRef(heartRate);
+  const isAnomalyRef = useRef(isAnomaly);
+
+  // Keep refs synchronized with props without restarting canvas animation loop
+  useEffect(() => {
+    heartRateRef.current = heartRate;
+    isAnomalyRef.current = isAnomaly;
+  }, [heartRate, isAnomaly]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -72,10 +80,13 @@ export default function DigitalTwin3D({ heartRate, isAnomaly }: DigitalTwin3DPro
     let pulsePhase = 0;
 
     const render = () => {
+      const currentHr = heartRateRef.current || 75;
+      const currentAnomaly = isAnomalyRef.current;
+
       if (!isDragging) {
         rotationY += 0.012;
       }
-      pulsePhase += (heartRate / 60) * 0.08;
+      pulsePhase += (currentHr / 60) * 0.08;
 
       const width = canvas.width;
       const heightPx = canvas.height;
@@ -107,66 +118,74 @@ export default function DigitalTwin3D({ heartRate, isAnomaly }: DigitalTwin3DPro
         };
       });
 
-      // Draw wireframe grid lines
+      // Draw wireframe rings
       ctx.lineWidth = 1;
-      ctx.strokeStyle = isAnomaly ? "rgba(239, 68, 68, 0.45)" : "rgba(34, 211, 238, 0.45)";
-
-      // Draw horizontal rings
       for (let r = 0; r <= rings; r++) {
+        const startIdx = r * segments;
         ctx.beginPath();
+        const baseAlpha = 0.15 + (r / rings) * 0.2;
+        ctx.strokeStyle = currentAnomaly
+          ? `rgba(244, 63, 94, ${baseAlpha})`
+          : `rgba(6, 182, 212, ${baseAlpha})`;
+
         for (let s = 0; s < segments; s++) {
-          const idx = r * segments + s;
-          const nextIdx = r * segments + ((s + 1) % segments);
-          ctx.moveTo(projected[idx].x, projected[idx].y);
-          ctx.lineTo(projected[nextIdx].x, projected[nextIdx].y);
+          const pt = projected[startIdx + s];
+          if (s === 0) {
+            ctx.moveTo(pt.x, pt.y);
+          } else {
+            ctx.lineTo(pt.x, pt.y);
+          }
         }
+        ctx.closePath();
         ctx.stroke();
       }
 
-      // Draw vertical lines
+      // Draw longitudinal ribs
       for (let s = 0; s < segments; s++) {
         ctx.beginPath();
-        for (let r = 0; r < rings; r++) {
-          const idx = r * segments + s;
-          const nextIdx = (r + 1) * segments + s;
-          ctx.moveTo(projected[idx].x, projected[idx].y);
-          ctx.lineTo(projected[nextIdx].x, projected[nextIdx].y);
+        ctx.strokeStyle = currentAnomaly
+          ? "rgba(244, 63, 94, 0.2)"
+          : "rgba(6, 182, 212, 0.2)";
+        for (let r = 0; r <= rings; r++) {
+          const pt = projected[r * segments + s];
+          if (r === 0) {
+            ctx.moveTo(pt.x, pt.y);
+          } else {
+            ctx.lineTo(pt.x, pt.y);
+          }
         }
         ctx.stroke();
       }
 
-      // Draw cross-diagonal lattice struts
-      ctx.strokeStyle = isAnomaly ? "rgba(239, 68, 68, 0.2)" : "rgba(34, 211, 238, 0.2)";
-      ctx.beginPath();
-      for (let r = 0; r < rings; r++) {
-        for (let s = 0; s < segments; s++) {
-          const idx = r * segments + s;
-          const diagIdx = (r + 1) * segments + ((s + 1) % segments);
-          ctx.moveTo(projected[idx].x, projected[idx].y);
-          ctx.lineTo(projected[diagIdx].x, projected[diagIdx].y);
+      // Draw active sensor nodes on vertices
+      projected.forEach((pt, idx) => {
+        if (idx % 3 === 0) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 1.8, 0, Math.PI * 2);
+          ctx.fillStyle = currentAnomaly ? "#f43f5e" : "#06b6d4";
+          ctx.fill();
         }
-      }
-      ctx.stroke();
+      });
 
-      // Center Vital Node (Heart node sphere)
-      const heartPulse = Math.sin(pulsePhase) * 4;
-      const sphereRadius = Math.max(12, 16 + heartPulse);
+      // Central Vital Sphere (Heart / Core node with pulsation)
+      const pulse = 1 + Math.sin(pulsePhase) * 0.18;
+      const sphereRadius = 14 * pulse;
 
       const sphereGrad = ctx.createRadialGradient(
         cx - 3,
-        cy - 20 - 3,
+        cy - 23,
         2,
         cx,
         cy - 20,
         sphereRadius
       );
-      if (isAnomaly) {
-        sphereGrad.addColorStop(0, "#fca5a5");
+      if (currentAnomaly) {
+        sphereGrad.addColorStop(0, "#ff4d6d");
         sphereGrad.addColorStop(0.6, "#ef4444");
-        sphereGrad.addColorStop(1, "rgba(220, 38, 38, 0.2)");
+        sphereGrad.addColorStop(1, "rgba(239, 68, 68, 0.2)");
       } else {
-        sphereGrad.addColorStop(0, "#f472b6");
-        sphereGrad.addColorStop(0.6, "#ec4899");
+        sphereGrad.addColorStop(0, "#a855f7");
+        sphereGrad.addColorStop(0.5, "#ec4899");
         sphereGrad.addColorStop(1, "rgba(236, 72, 153, 0.2)");
       }
 
@@ -178,7 +197,9 @@ export default function DigitalTwin3D({ heartRate, isAnomaly }: DigitalTwin3DPro
       // Outer glow around sphere
       ctx.beginPath();
       ctx.arc(cx, cy - 20, sphereRadius + 6, 0, Math.PI * 2);
-      ctx.strokeStyle = isAnomaly ? "rgba(239, 68, 68, 0.3)" : "rgba(236, 72, 153, 0.3)";
+      ctx.strokeStyle = currentAnomaly
+        ? "rgba(239, 68, 68, 0.3)"
+        : "rgba(236, 72, 153, 0.3)";
       ctx.stroke();
 
       animationFrameId = requestAnimationFrame(render);
@@ -192,7 +213,7 @@ export default function DigitalTwin3D({ heartRate, isAnomaly }: DigitalTwin3DPro
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [heartRate, isAnomaly]);
+  }, []); // Run ONCE on mount; updates via refs without snapping
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none">

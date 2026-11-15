@@ -30,9 +30,22 @@ export default function ChatPanel({ crewId, onClose }: ChatPanelProps) {
   const [aiEngineStatus, setAiEngineStatus] = useState("Checking...");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   useEffect(() => {
     fetchAiStatus().then((status) => {
-      setAiEngineStatus(status);
+      setAiEngineStatus(
+        status.state === "Active"
+          ? `${status.engine} (Active)`
+          : `${status.engine} (Offline - Edge Rules)`
+      );
     });
   }, []);
 
@@ -84,113 +97,136 @@ export default function ChatPanel({ crewId, onClose }: ChatPanelProps) {
   ];
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-[#090e18]/95 border-l border-[#1b263b] shadow-2xl backdrop-blur-xl z-50 flex flex-col font-sans text-slate-200">
-      {/* Header */}
-      <div className="p-4 border-b border-[#182337] flex items-center justify-between bg-[#070b13]">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400">
-            <Brain className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold font-mono tracking-wider text-white">
-                CREW AI MEDICAL CHAT
-              </h3>
-              <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                POST /chat
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-mono">
-              Engine: {aiEngineStatus} · Non-Prescriptive Decision Support
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#151f33] transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity"
+        onClick={onClose}
+      />
 
-      {/* Quick Prompts Bar */}
-      <div className="p-2.5 border-b border-[#182337] bg-[#090f1b] flex gap-2 overflow-x-auto scrollbar-none">
-        {quickPrompts.map((qp, i) => (
+      <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-[#090e18]/95 border-l border-[#1b263b] shadow-2xl backdrop-blur-xl z-50 flex flex-col font-sans text-slate-200">
+        {/* Header */}
+        <div className="p-4 border-b border-[#182337] flex items-center justify-between bg-[#070b13]">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400">
+              <Brain className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold font-mono tracking-wider text-white">
+                  CREW AI MEDICAL CHAT
+                </h3>
+                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  POST /chat
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-mono">
+                Engine: {aiEngineStatus} · Non-Prescriptive Decision Support
+              </p>
+            </div>
+          </div>
           <button
-            key={i}
-            onClick={() => handleSend(qp)}
-            disabled={loading}
-            className="px-2.5 py-1 rounded-full text-[10px] font-mono whitespace-nowrap bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-colors shrink-0 disabled:opacity-50"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#151f33] transition-colors"
           >
-            {qp}
+            <X className="w-4 h-4" />
           </button>
-        ))}
-      </div>
+        </div>
 
-      {/* Messages Viewport */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`flex items-start gap-2.5 ${
-              m.sender === "user" ? "flex-row-reverse" : "flex-row"
-            }`}
-          >
+        {/* Quick Prompts Bar */}
+        <div className="p-2.5 border-b border-[#182337] bg-[#090f1b] flex gap-2 overflow-x-auto scrollbar-none">
+          {quickPrompts.map((qp, i) => (
+            <button
+              key={i}
+              onClick={() => handleSend(qp)}
+              disabled={loading}
+              className="px-2.5 py-1 rounded-full text-[10px] font-mono whitespace-nowrap bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-colors shrink-0 disabled:opacity-50"
+            >
+              {qp}
+            </button>
+          ))}
+        </div>
+
+        {/* Messages Viewport */}
+        <div className="flex-1 p-4 overflow-y-auto space-y-3 font-mono text-xs">
+          {messages.map((m, idx) => (
             <div
-              className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center text-xs ${
-                m.sender === "user"
-                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
-                  : "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+              key={idx}
+              className={`flex gap-2.5 ${
+                m.sender === "user" ? "justify-end" : "justify-start"
               }`}
             >
-              {m.sender === "user" ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
-            </div>
+              {m.sender === "ai" && (
+                <div className="w-6 h-6 rounded-md bg-purple-500/20 border border-purple-500/40 text-purple-300 flex items-center justify-center shrink-0 mt-0.5">
+                  <Bot className="w-3.5 h-3.5" />
+                </div>
+              )}
 
-            <div
-              className={`max-w-[80%] p-3 rounded-2xl text-xs font-mono leading-relaxed space-y-1 ${
-                m.sender === "user"
-                  ? "bg-cyan-950/40 border border-cyan-500/30 text-cyan-100 rounded-tr-none"
-                  : "bg-[#0c1424] border border-[#1d2c47] text-slate-200 rounded-tl-none"
-              }`}
-            >
-              <p>{m.text}</p>
-              <div className="flex items-center justify-between text-[9px] text-slate-500 pt-1">
-                <span>{m.time}</span>
-                {m.source && (
-                  <span className="text-[8px] uppercase text-purple-400 font-bold">
-                    {m.source === "ollama" ? "LLaMA-3" : "Rule Fallback"}
+              <div
+                className={`max-w-[85%] rounded-xl p-3 leading-relaxed ${
+                  m.sender === "user"
+                    ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-100"
+                    : "bg-[#0d1624] border border-[#1b263b] text-slate-200"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3 mb-1 text-[10px] text-slate-400">
+                  <span className="font-semibold text-slate-300">
+                    {m.sender === "user" ? "Astronaut" : "ORBIT Medical AI"}
                   </span>
+                  <span>{m.time}</span>
+                </div>
+                <p className="whitespace-pre-wrap">{m.text}</p>
+                {m.source && (
+                  <div className="mt-2 pt-1.5 border-t border-[#182337] flex items-center gap-1.5 text-[9px] text-slate-400">
+                    <Sparkles className="w-2.5 h-2.5 text-purple-400" />
+                    <span>Source: {m.source === "ollama" ? "Llama-3 LLM" : "Deterministic Rule Engine"}</span>
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="flex items-center gap-2 text-xs font-mono text-purple-400">
-            <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
-            <span>AI generating clinical reasoning...</span>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
 
-      {/* Input Box */}
-      <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="p-3 border-t border-[#182337] bg-[#070b13] flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask AI Medical Assistant..."
-          className="flex-1 bg-[#060a12] border border-[#1b283d] rounded-xl px-3 py-2 text-xs font-mono text-purple-200 placeholder-slate-600 focus:outline-none focus:border-purple-500"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
-        >
-          <Send className="w-3.5 h-3.5" />
-        </button>
-      </form>
-    </div>
+              {m.sender === "user" && (
+                <div className="w-6 h-6 rounded-md bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center justify-center shrink-0 mt-0.5">
+                  <User className="w-3.5 h-3.5" />
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex items-center gap-2 text-slate-400 text-xs">
+              <Bot className="w-4 h-4 text-purple-400 animate-spin" />
+              <span>Synthesizing clinical response...</span>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input Form */}
+        <div className="p-3 border-t border-[#182337] bg-[#070b13]">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
+            className="flex items-center gap-2"
+          >
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask medical question or telemetry interpretation..."
+              className="flex-1 bg-[#0b121e] border border-[#1c293e] rounded-xl px-3.5 py-2 text-xs font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500/60"
+            />
+            <button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="p-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white transition-colors"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
+        </div>
+      </div>
+    </>
   );
 }

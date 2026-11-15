@@ -31,6 +31,7 @@ import {
   ShieldAlert,
   Clock,
   ArrowUpRight,
+  Info,
 } from "lucide-react";
 import DigitalTwin3D from "@/components/DigitalTwin3D";
 import NotesPanel from "@/components/panels/NotesPanel";
@@ -49,6 +50,7 @@ import {
   setSimulatorMode,
   type AnalyticsData,
   type StatusResponse,
+  type AiStatusResponse,
 } from "@/lib/api";
 import {
   ResponsiveContainer,
@@ -112,10 +114,22 @@ export default function OrbitTelemetryDashboard() {
   const [wsLatency, setWsLatency] = useState(48);
   const [lastApiAction, setLastApiAction] = useState<string | null>(null);
   const [apiStatusSummary, setApiStatusSummary] = useState<StatusResponse | null>(null);
-  const [aiEngineStatus, setAiEngineStatus] = useState<string>("Active (Ollama Llama-3)");
+  const [aiEngineStatus, setAiEngineStatus] = useState<AiStatusResponse>({
+    engine: "Ollama LLaMA-3",
+    state: "Active",
+  });
   const [recentEvents, setRecentEvents] = useState<
     { kind: string; detail: string; at: string | null }[]
   >([]);
+
+  // Live incoming telemetry snapshot (for real card updates)
+  const [latestLiveMetrics, setLatestLiveMetrics] = useState<{
+    hr: number;
+    rad: number;
+    co2: number;
+    sleep: number;
+    status?: string;
+  } | null>(null);
 
   // Chart telemetry state: 25 time-series points (0s to 24s)
   const [telemetryHistory, setTelemetryHistory] = useState<
@@ -145,17 +159,32 @@ export default function OrbitTelemetryDashboard() {
       setIsApiConnected(true);
       setWsLatency(latencyMs);
       setLastApiAction(`GET /status (${latencyMs}ms) OK`);
+
+      if (
+        typeof data.analytics_summary === "object" &&
+        data.analytics_summary !== null &&
+        "metrics" in data.analytics_summary
+      ) {
+        const m = data.analytics_summary.metrics;
+        setLatestLiveMetrics({
+          hr: m.avg_heart_rate,
+          rad: m.current_radiation,
+          co2: m.current_co2,
+          sleep: m.sleep_debt_hours,
+          status: data.analytics_summary.system_status,
+        });
+      }
     } catch {
       setIsApiConnected(false);
       setLastApiAction("API: Offline-Edge (Local Mode)");
     }
 
-    // Check real AI status
+    // Check real AI status safely
     try {
       const aiStatus = await fetchAiStatus();
-      setAiEngineStatus(aiStatus || "Active (Ollama)");
+      setAiEngineStatus(aiStatus);
     } catch {
-      setAiEngineStatus("Edge Rule Engine (Offline)");
+      setAiEngineStatus({ engine: "Edge Rule Engine", state: "Offline" });
     }
 
     // Load recent events
@@ -198,15 +227,24 @@ export default function OrbitTelemetryDashboard() {
             setIsApiConnected(true);
             setWsLatency(35 + Math.floor(Math.random() * 20));
 
-            // Feed new point into telemetry history
+            const nextHr = a.metrics.avg_heart_rate || 76;
+            let nextSpo2 = 98.4;
+            if (anomalyMode === "hypoxia") nextSpo2 = 86.4;
+            else if (anomalyMode === "tachycardia") nextSpo2 = 96.0;
+            else if (anomalyMode === "storm") nextSpo2 = 97.2;
+
+            // Update live metrics snapshot for metric cards
+            setLatestLiveMetrics({
+              hr: nextHr,
+              rad: a.metrics.current_radiation,
+              co2: a.metrics.current_co2,
+              sleep: a.metrics.sleep_debt_hours,
+              status: a.system_status,
+            });
+
+            // Feed new point into telemetry history without jitter
             setTelemetryHistory((prev) => {
               if (prev.length === 0) return prev;
-              const nextHr = a.metrics.avg_heart_rate || 76;
-              let nextSpo2 = 98.4;
-              if (anomalyMode === "hypoxia") nextSpo2 = 86.4;
-              else if (anomalyMode === "tachycardia") nextSpo2 = 96.0;
-              else if (anomalyMode === "storm") nextSpo2 = 97.2;
-
               const shifted = prev.slice(1).map((pt, idx) => ({
                 ...pt,
                 second: `${idx}s`,
@@ -294,6 +332,14 @@ export default function OrbitTelemetryDashboard() {
       };
     }
 
+    // Immediately update live metrics snapshot so dashboard responds instantly
+    setLatestLiveMetrics({
+      hr: payload.heart_rate,
+      rad: payload.radiation_level,
+      co2: payload.co2_level,
+      sleep: payload.sleep_debt,
+    });
+
     try {
       // 1. Tell backend simulator to switch mode
       await setSimulatorMode(simMode);
@@ -351,8 +397,10 @@ export default function OrbitTelemetryDashboard() {
     setTelemetryHistory(points);
   }, [anomalyMode]);
 
-  // 5. Continuous local baseline animation
+  // 5. Continuous local baseline animation ONLY IF BACKEND IS NOT STREAMING
   useEffect(() => {
+    if (isApiConnected) return; // Prevent jitter when real WebSocket is streaming
+
     const timer = setInterval(() => {
       setTelemetryHistory((prev) => {
         if (prev.length === 0) return prev;
@@ -388,22 +436,60 @@ export default function OrbitTelemetryDashboard() {
     }, 1500);
 
     return () => clearInterval(timer);
-  }, [anomalyMode]);
+  }, [isApiConnected, anomalyMode]);
 
-  // Derived current metric values based on anomalyMode & backend response
+  // Derived current metric values integrating real streaming values from backend
   const currentMetrics = useMemo(() => {
+    // 1. Resolve Heart Rate
+    let hr = latestLiveMetrics ? Math.round(latestLiveMetrics.hr * 10) / 10 : 78;
+    let rad = latestLiveMetrics ? Math.round(latestLiveMetrics.rad * 1000) / 1000 : 0.12;
+    let spo2 = 98.4;
+    let temp = 36.8;
+
+    if (anomalyMode === "hypoxia") {
+      spo2 = 86.6;
+      temp = 37.2;
+    } else if (anomalyMode === "tachycardia") {
+      spo2 = 96.1;
+      temp = 37.6;
+    } else if (anomalyMode === "storm") {
+      spo2 = 97.2;
+      temp = 37.4;
+    }
+
+    // Dynamic statuses & colors based on thresholds
+    const hrStatus =
+      hr > 120
+        ? "CRITICAL (TACHYCARDIA)"
+        : hr > 100
+        ? "ELEVATED (WARNING)"
+        : "STABLE";
+    const hrColor = hr > 120 ? "#ef4444" : hr > 100 ? "#f59e0b" : "#10b981";
+
+    const radStatus =
+      rad > 2.0
+        ? "CRITICAL (SOLAR FLARE)"
+        : rad > 1.0
+        ? "ELEVATED (WARNING)"
+        : "SAFE";
+    const radColor = rad > 2.0 ? "#ff073a" : rad > 1.0 ? "#f59e0b" : "#10b981";
+
+    const spo2Status = spo2 < 90 ? "CRITICAL (HYPOXIA)" : "OPTIMAL";
+    const spo2Color = spo2 < 90 ? "#ef4444" : "#10b981";
+
     if (anomalyMode === "normal") {
       return {
-        hr: 78,
-        hrStatus: "STABLE",
-        hrColor: "#10b981",
-        spo2: 98.4,
-        spo2Status: "OPTIMAL",
-        spo2Color: "#10b981",
-        temp: 36.8,
+        hr,
+        hrStatus,
+        hrColor,
+        spo2,
+        spo2Status,
+        spo2Color,
+        temp,
         tempStatus: "NORMAL",
-        rad: 0.12,
-        radStatus: "SAFE",
+        rad,
+        radStatus,
+        radColor,
         suitPressure: "4.1 psi",
         suitThermal: "Nominal",
         cosmicFlare: "Quiet",
@@ -415,16 +501,17 @@ export default function OrbitTelemetryDashboard() {
       };
     } else if (anomalyMode === "hypoxia") {
       return {
-        hr: 119,
-        hrStatus: "STABLE",
-        hrColor: "#10b981",
-        spo2: 86.6,
-        spo2Status: "CRITICAL (HYPOXIA)",
-        spo2Color: "#ef4444",
-        temp: 37.2,
+        hr,
+        hrStatus,
+        hrColor,
+        spo2,
+        spo2Status,
+        spo2Color,
+        temp,
         tempStatus: "NORMAL",
-        rad: 0.14,
-        radStatus: "SAFE",
+        rad,
+        radStatus,
+        radColor,
         suitPressure: "4.1 psi",
         suitThermal: "Nominal",
         cosmicFlare: "Quiet",
@@ -435,48 +522,49 @@ export default function OrbitTelemetryDashboard() {
       };
     } else if (anomalyMode === "tachycardia") {
       return {
-        hr: 142,
-        hrStatus: "ELEVATED (TACHYCARDIA)",
-        hrColor: "#ef4444",
-        spo2: 96.1,
-        spo2Status: "OPTIMAL",
-        spo2Color: "#10b981",
-        temp: 37.6,
+        hr,
+        hrStatus,
+        hrColor,
+        spo2,
+        spo2Status,
+        spo2Color,
+        temp,
         tempStatus: "WARM",
-        rad: 0.14,
-        radStatus: "SAFE",
+        rad,
+        radStatus,
+        radColor,
         suitPressure: "4.1 psi",
         suitThermal: "Elevated",
         cosmicFlare: "Quiet",
         aiStatus: "WARNING: TACHYCARDIA STRESS DETECTED",
         aiColor: "#f59e0b",
         aiMessage:
-          "Sustained elevated heart rate (142 BPM) during EVA. Recommend metabolic rest cycle, suit liquid cooling adjustment, and hydration check.",
+          "Sustained elevated heart rate during EVA. Recommend metabolic rest cycle, suit liquid cooling adjustment, and hydration check.",
       };
     } else {
       // Solar storm
       return {
-        hr: 112,
-        hrStatus: "ELEVATED",
-        hrColor: "#f59e0b",
-        spo2: 97.2,
-        spo2Status: "OPTIMAL",
-        spo2Color: "#10b981",
-        temp: 37.4,
+        hr,
+        hrStatus,
+        hrColor,
+        spo2,
+        spo2Status,
+        spo2Color,
+        temp,
         tempStatus: "WARM",
-        rad: 2.85,
-        radStatus: "CRITICAL (SOLAR FLARE)",
-        radColor: "#ff073a",
+        rad,
+        radStatus,
+        radColor,
         suitPressure: "4.1 psi",
         suitThermal: "Shielding",
         cosmicFlare: "X-Class Flare",
         aiStatus: "CRITICAL: SOLAR FLARE RADIATION SPIKE",
         aiColor: "#ff073a",
         aiMessage:
-          "High ionizing radiation flux detected (>2.5 mSv/h). Deep space solar flare in progress. Terminate EVA immediately and proceed to storm shelter module.",
+          "High ionizing radiation flux detected (>2.0 mSv/h). Deep space solar flare in progress. Terminate EVA immediately and proceed to storm shelter module.",
       };
     }
-  }, [anomalyMode, apiStatusSummary]);
+  }, [anomalyMode, latestLiveMetrics, apiStatusSummary]);
 
   const copyDockerCmd = () => {
     navigator.clipboard.writeText(
@@ -487,7 +575,7 @@ export default function OrbitTelemetryDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b12] text-slate-100 flex font-sans select-none antialiased relative">
+    <div className="min-h-screen bg-[#070b12] text-slate-100 flex font-sans select-none antialiased relative overflow-x-hidden">
       {/* 1. LEFT SIDEBAR NAVIGATION RAIL */}
       <aside className="w-14 shrink-0 bg-[#060910] border-r border-[#151d2d] flex flex-col items-center py-4 justify-between z-30">
         <div className="flex flex-col items-center gap-6">
@@ -635,10 +723,10 @@ export default function OrbitTelemetryDashboard() {
       {/* 2. MAIN MISSION CONTROL VIEWPORT */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Top Header Bar */}
-        <header className="px-6 py-4 border-b border-[#131b2c] flex flex-wrap items-center justify-between gap-4 bg-[#080d16]/90 backdrop-blur-md sticky top-0 z-20">
+        <header className="px-4 sm:px-6 py-4 border-b border-[#131b2c] flex flex-wrap items-center justify-between gap-4 bg-[#080d16]/90 backdrop-blur-md sticky top-0 z-20">
           {/* Logo & Title */}
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.25)]">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.25)] shrink-0">
               <svg
                 viewBox="0 0 24 24"
                 className="w-5 h-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
@@ -649,25 +737,25 @@ export default function OrbitTelemetryDashboard() {
               </svg>
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold tracking-wider text-white">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">
                   ORBIT<span className="text-cyan-400">.TELEMETRY</span>
                 </h1>
                 <span className="text-[10px] font-mono font-semibold tracking-wider px-2 py-0.5 rounded border border-cyan-500/40 text-cyan-400 bg-cyan-500/10">
                   NASA SPACE APPS
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hidden sm:inline">
                   OFFLINE-EDGE v1.1
                 </span>
               </div>
-              <p className="text-xs text-slate-400 tracking-wide">
-                Astronaut Health & Vital Telemetry Bio-Monitoring Center
+              <p className="text-[11px] sm:text-xs text-slate-400 tracking-wide">
+                Astronaut Health &amp; Vital Telemetry Bio-Monitoring Center
               </p>
             </div>
           </div>
 
           {/* Right Status Indicators (With real API status) */}
-          <div className="flex items-center gap-5 text-xs font-mono">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-5 text-xs font-mono">
             <div className="flex items-center gap-2 text-cyan-400">
               <span className="text-sm">🛰️</span>
               <span className="text-slate-400">Station:</span>
@@ -685,20 +773,22 @@ export default function OrbitTelemetryDashboard() {
               }
             >
               <Wifi className="w-3.5 h-3.5" />
-              <span className="text-slate-400">Telemetry Stream:</span>
+              <span className="text-slate-400">Stream:</span>
               <span className="font-semibold">
-                {isApiConnected ? `${wsLatency} ms (1 Hz WS)` : "Edge (Offline Mode)"}
+                {isApiConnected ? `${wsLatency} ms (1 Hz WS)` : "Edge (Offline)"}
               </span>
             </div>
 
             <div
               className={`flex items-center gap-2 ${
-                aiEngineStatus.includes("Offline") ? "text-cyan-400" : "text-purple-400"
+                aiEngineStatus.state === "Offline" ? "text-cyan-400" : "text-purple-400"
               }`}
             >
               <Brain className="w-3.5 h-3.5" />
-              <span className="text-slate-400">AI Engine:</span>
-              <span className="font-semibold">{aiEngineStatus}</span>
+              <span className="text-slate-400">AI:</span>
+              <span className="font-semibold">
+                {aiEngineStatus.engine} ({aiEngineStatus.state})
+              </span>
             </div>
 
             {/* Crew Check-in Trigger Button */}
@@ -724,7 +814,7 @@ export default function OrbitTelemetryDashboard() {
         </header>
 
         {/* 1-Click Docker Deploy Subheader Strip & Live API Dispatch Indicator */}
-        <div className="px-6 pt-3 pb-1 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 pt-3 pb-1 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsDockerModalOpen(true)}
@@ -783,11 +873,11 @@ export default function OrbitTelemetryDashboard() {
         </div>
 
         {/* Dashboard Main Workspace */}
-        <main className="p-6 space-y-5">
+        <main className="p-4 sm:p-6 space-y-5">
           {/* 3. ACTIVE SUBJECT MONITORING & ANOMALY SIMULATOR BAR */}
           <div className="bg-[#0b121f] border border-[#182337] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-lg">
             {/* Subject Dropdown & Avatar */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <div className="relative">
                 <img
                   src={selectedAstronaut.avatar}
@@ -797,9 +887,18 @@ export default function OrbitTelemetryDashboard() {
               </div>
 
               <div>
-                <p className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase">
-                  ACTIVE SUBJECT MONITORING
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase">
+                    ACTIVE SUBJECT MONITORING
+                  </p>
+                  {selectedAstronaut.id !== "CREW-1" && (
+                    <span className="text-[9px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <Info className="w-2.5 h-2.5" />
+                      Simulator default: CREW-1
+                    </span>
+                  )}
+                </div>
+
                 <div className="relative mt-1">
                   <button
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -859,7 +958,7 @@ export default function OrbitTelemetryDashboard() {
 
             {/* Simulate Anomaly Stress Buttons (Connected to POST /simulator/mode & POST /push) */}
             <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-400 font-mono tracking-wide">
+              <span className="text-xs text-slate-400 font-mono tracking-wide hidden sm:inline">
                 Scenario Injector:
               </span>
               <div className="flex flex-wrap items-center gap-2">
@@ -911,7 +1010,7 @@ export default function OrbitTelemetryDashboard() {
             </div>
           </div>
 
-          {/* 4. FOUR HORIZONTAL METRIC CARDS */}
+          {/* 4. FOUR HORIZONTAL METRIC CARDS (REAL LIVE STREAMING NUMBERS) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Card 1: HEART RATE */}
             <div className="bg-[#0b121f] border border-[#182337] rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between shadow-md">
@@ -1037,7 +1136,7 @@ export default function OrbitTelemetryDashboard() {
                 </div>
                 <div
                   className={`w-9 h-9 rounded-xl border flex items-center justify-center ${
-                    anomalyMode === "storm"
+                    currentMetrics.rad > 1.0
                       ? "bg-rose-500/20 border-rose-500/40 text-rose-400 animate-pulse"
                       : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                   }`}
@@ -1050,17 +1149,14 @@ export default function OrbitTelemetryDashboard() {
                 <span className="text-slate-400">Threshold: &lt; 0.50</span>
                 <span
                   className="font-bold tracking-wider"
-                  style={{
-                    color:
-                      anomalyMode === "storm" ? "#ff073a" : "#10b981",
-                  }}
+                  style={{ color: currentMetrics.radColor }}
                 >
                   {currentMetrics.radStatus}
                 </span>
               </div>
               <div
                 className={`absolute bottom-0 left-0 right-0 h-1 ${
-                  anomalyMode === "storm" ? "bg-rose-500" : "bg-emerald-400"
+                  currentMetrics.rad > 1.0 ? "bg-rose-500" : "bg-emerald-400"
                 }`}
                 style={{
                   width: `${Math.min(100, (currentMetrics.rad / 3.0) * 100)}%`,
@@ -1190,7 +1286,7 @@ export default function OrbitTelemetryDashboard() {
                   <div className="flex items-center gap-2">
                     <Box className="w-4 h-4 text-cyan-400" />
                     <h3 className="text-xs font-mono font-bold tracking-wider text-slate-200 uppercase">
-                      SUIT & ANATOMY DIGITAL TWIN
+                      SUIT &amp; ANATOMY DIGITAL TWIN
                     </h3>
                   </div>
                   <span className="text-[10px] text-slate-500 font-mono">
@@ -1208,7 +1304,7 @@ export default function OrbitTelemetryDashboard() {
               <div className="my-auto py-2">
                 <DigitalTwin3D
                   heartRate={currentMetrics.hr}
-                  isAnomaly={anomalyMode !== "normal"}
+                  isAnomaly={anomalyMode !== "normal" || currentMetrics.hr > 120}
                 />
               </div>
 
@@ -1236,7 +1332,7 @@ export default function OrbitTelemetryDashboard() {
                     </h3>
                   </div>
                   <span className="text-xs text-slate-400 font-mono">
-                    Model: Llama3-Medical-Space
+                    Model: {aiEngineStatus.engine}
                   </span>
                 </div>
 
