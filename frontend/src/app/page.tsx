@@ -32,14 +32,20 @@ import {
   Clock,
   ArrowUpRight,
   Info,
+  BookOpen,
+  Trophy,
 } from "lucide-react";
 import DigitalTwin3D from "@/components/DigitalTwin3D";
+import InteractiveAnatomy from "@/components/InteractiveAnatomy";
+import EnvironmentSwitcher, { ENVIRONMENTS, type Environment } from "@/components/EnvironmentSwitcher";
 import NotesPanel from "@/components/panels/NotesPanel";
 import SearchPanel from "@/components/panels/SearchPanel";
 import ChatPanel from "@/components/panels/ChatPanel";
 import SyncPanel from "@/components/panels/SyncPanel";
 import SettingsPanel from "@/components/panels/SettingsPanel";
 import CheckInModal from "@/components/panels/CheckInModal";
+import MedicalGuideModal from "@/components/panels/MedicalGuideModal";
+import GamificationPanel from "@/components/panels/GamificationPanel";
 import {
   BACKEND_URL,
   WS_URL,
@@ -109,6 +115,18 @@ export default function OrbitTelemetryDashboard() {
   const [copiedDocker, setCopiedDocker] = useState(false);
   const [currentTimeUTC, setCurrentTimeUTC] = useState("11:34:02 UTC");
 
+  // Environment & View Switcher States
+  const [currentEnv, setCurrentEnv] = useState<Environment>(ENVIRONMENTS[0]);
+  const [anatomyView, setAnatomyView] = useState<"3d" | "anatomy">("3d");
+  const [isMedGuideOpen, setIsMedGuideOpen] = useState(false);
+  const [selectedHazardKey, setSelectedHazardKey] = useState<string | undefined>(undefined);
+  const [isGamificationOpen, setIsGamificationOpen] = useState(false);
+
+  const handleOpenMedGuide = (hazardKey?: string) => {
+    setSelectedHazardKey(hazardKey);
+    setIsMedGuideOpen(true);
+  };
+
   // Real API & WebSocket States
   const [isApiConnected, setIsApiConnected] = useState(false);
   const [wsLatency, setWsLatency] = useState(48);
@@ -128,6 +146,8 @@ export default function OrbitTelemetryDashboard() {
     rad: number;
     co2: number;
     sleep: number;
+    sugar?: number;
+    temp?: number;
     status?: string;
   } | null>(null);
 
@@ -171,6 +191,8 @@ export default function OrbitTelemetryDashboard() {
           rad: m.current_radiation,
           co2: m.current_co2,
           sleep: m.sleep_debt_hours,
+          sugar: m.current_blood_sugar ?? 95,
+          temp: m.current_body_temperature ?? 36.8,
           status: data.analytics_summary.system_status,
         });
       }
@@ -239,6 +261,8 @@ export default function OrbitTelemetryDashboard() {
               rad: a.metrics.current_radiation,
               co2: a.metrics.current_co2,
               sleep: a.metrics.sleep_debt_hours,
+              sugar: a.metrics.current_blood_sugar ?? 95,
+              temp: a.metrics.current_body_temperature ?? 36.8,
               status: a.system_status,
             });
 
@@ -297,6 +321,8 @@ export default function OrbitTelemetryDashboard() {
       radiation_level: 0.12,
       co2_level: 0.038,
       sleep_debt: 1.2,
+      blood_sugar: 92.0,
+      body_temperature: 36.8,
     };
     let simMode: "normal" | "warning" | "critical" | "storm" = "normal";
 
@@ -309,6 +335,8 @@ export default function OrbitTelemetryDashboard() {
         radiation_level: 0.14,
         co2_level: 0.086,
         sleep_debt: 2.5,
+        blood_sugar: 135.0,
+        body_temperature: 37.2,
       };
     } else if (mode === "tachycardia") {
       simMode = "critical";
@@ -319,6 +347,8 @@ export default function OrbitTelemetryDashboard() {
         radiation_level: 0.15,
         co2_level: 0.042,
         sleep_debt: 5.5,
+        blood_sugar: 148.0,
+        body_temperature: 37.8,
       };
     } else if (mode === "storm") {
       simMode = "storm";
@@ -329,6 +359,8 @@ export default function OrbitTelemetryDashboard() {
         radiation_level: 2.85,
         co2_level: 0.045,
         sleep_debt: 3.0,
+        blood_sugar: 195.0,
+        body_temperature: 38.6,
       };
     }
 
@@ -338,6 +370,8 @@ export default function OrbitTelemetryDashboard() {
       rad: payload.radiation_level,
       co2: payload.co2_level,
       sleep: payload.sleep_debt,
+      sugar: payload.blood_sugar,
+      temp: payload.body_temperature,
     });
 
     try {
@@ -440,21 +474,29 @@ export default function OrbitTelemetryDashboard() {
 
   // Derived current metric values integrating real streaming values from backend
   const currentMetrics = useMemo(() => {
-    // 1. Resolve Heart Rate
+    // 1. Resolve Heart Rate & Biometrics
     let hr = latestLiveMetrics ? Math.round(latestLiveMetrics.hr * 10) / 10 : 78;
     let rad = latestLiveMetrics ? Math.round(latestLiveMetrics.rad * 1000) / 1000 : 0.12;
     let spo2 = 98.4;
-    let temp = 36.8;
+    let temp = latestLiveMetrics?.temp ? Math.round(latestLiveMetrics.temp * 10) / 10 : 36.8;
+    let sugar = latestLiveMetrics?.sugar ? Math.round(latestLiveMetrics.sugar * 10) / 10 : 94.0;
+    let bp = 120;
 
     if (anomalyMode === "hypoxia") {
       spo2 = 86.6;
       temp = 37.2;
+      sugar = 134.0;
+      bp = 130;
     } else if (anomalyMode === "tachycardia") {
       spo2 = 96.1;
       temp = 37.6;
+      sugar = 148.0;
+      bp = 165;
     } else if (anomalyMode === "storm") {
       spo2 = 97.2;
-      temp = 37.4;
+      temp = 38.6;
+      sugar = 195.0;
+      bp = 138;
     }
 
     // Dynamic statuses & colors based on thresholds
@@ -477,19 +519,46 @@ export default function OrbitTelemetryDashboard() {
     const spo2Status = spo2 < 90 ? "CRITICAL (HYPOXIA)" : "OPTIMAL";
     const spo2Color = spo2 < 90 ? "#ef4444" : "#10b981";
 
+    const tempStatus =
+      temp > 38.5 || temp < 35.0
+        ? "CRITICAL"
+        : temp > 37.5 || temp < 36.0
+        ? "ELEVATED (WARNING)"
+        : "OPTIMAL";
+    const tempColor =
+      temp > 38.5 || temp < 35.0 ? "#ef4444" : temp > 37.5 || temp < 36.0 ? "#f59e0b" : "#10b981";
+
+    const sugarStatus =
+      sugar > 180 || sugar < 54
+        ? "CRITICAL"
+        : sugar > 140 || sugar < 70
+        ? "ELEVATED (WARNING)"
+        : "NORMAL";
+    const sugarColor =
+      sugar > 180 || sugar < 54 ? "#ef4444" : sugar > 140 || sugar < 70 ? "#f59e0b" : "#10b981";
+
+    const baseData = {
+      hr,
+      hrStatus,
+      hrColor,
+      spo2,
+      spo2Status,
+      spo2Color,
+      temp,
+      tempStatus,
+      tempColor,
+      sugar,
+      sugarStatus,
+      sugarColor,
+      bp,
+      rad,
+      radStatus,
+      radColor,
+    };
+
     if (anomalyMode === "normal") {
       return {
-        hr,
-        hrStatus,
-        hrColor,
-        spo2,
-        spo2Status,
-        spo2Color,
-        temp,
-        tempStatus: "NORMAL",
-        rad,
-        radStatus,
-        radColor,
+        ...baseData,
         suitPressure: "4.1 psi",
         suitThermal: "Nominal",
         cosmicFlare: "Quiet",
@@ -497,21 +566,11 @@ export default function OrbitTelemetryDashboard() {
         aiColor: "#06b6d4",
         aiMessage:
           apiStatusSummary?.action_center?.instruction ||
-          "Biometric telemetry matches nominal EVA thresholds. Core temperature, respiration and SpO2 levels validated by edge rules.",
+          "Biometric telemetry matches nominal EVA thresholds. Core temperature, glucose, respiration and SpO2 levels validated by edge rules.",
       };
     } else if (anomalyMode === "hypoxia") {
       return {
-        hr,
-        hrStatus,
-        hrColor,
-        spo2,
-        spo2Status,
-        spo2Color,
-        temp,
-        tempStatus: "NORMAL",
-        rad,
-        radStatus,
-        radColor,
+        ...baseData,
         suitPressure: "4.1 psi",
         suitThermal: "Nominal",
         cosmicFlare: "Quiet",
@@ -522,17 +581,7 @@ export default function OrbitTelemetryDashboard() {
       };
     } else if (anomalyMode === "tachycardia") {
       return {
-        hr,
-        hrStatus,
-        hrColor,
-        spo2,
-        spo2Status,
-        spo2Color,
-        temp,
-        tempStatus: "WARM",
-        rad,
-        radStatus,
-        radColor,
+        ...baseData,
         suitPressure: "4.1 psi",
         suitThermal: "Elevated",
         cosmicFlare: "Quiet",
@@ -544,17 +593,7 @@ export default function OrbitTelemetryDashboard() {
     } else {
       // Solar storm
       return {
-        hr,
-        hrStatus,
-        hrColor,
-        spo2,
-        spo2Status,
-        spo2Color,
-        temp,
-        tempStatus: "WARM",
-        rad,
-        radStatus,
-        radColor,
+        ...baseData,
         suitPressure: "4.1 psi",
         suitThermal: "Shielding",
         cosmicFlare: "X-Class Flare",
@@ -755,8 +794,14 @@ export default function OrbitTelemetryDashboard() {
           </div>
 
           {/* Right Status Indicators (With real API status) */}
-          <div className="flex flex-wrap items-center gap-3 sm:gap-5 text-xs font-mono">
-            <div className="flex items-center gap-2 text-cyan-400">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 text-xs font-mono">
+            {/* Environment Switcher Dropdown */}
+            <EnvironmentSwitcher
+              currentEnv={currentEnv}
+              onEnvironmentChange={setCurrentEnv}
+            />
+
+            <div className="hidden lg:flex items-center gap-2 text-cyan-400">
               <span className="text-sm">🛰️</span>
               <span className="text-slate-400">Station:</span>
               <span className="font-semibold">ISS-LEO 408km</span>
@@ -780,7 +825,7 @@ export default function OrbitTelemetryDashboard() {
             </div>
 
             <div
-              className={`flex items-center gap-2 ${
+              className={`hidden sm:flex items-center gap-2 ${
                 aiEngineStatus.state === "Offline" ? "text-cyan-400" : "text-purple-400"
               }`}
             >
@@ -790,6 +835,29 @@ export default function OrbitTelemetryDashboard() {
                 {aiEngineStatus.engine} ({aiEngineStatus.state})
               </span>
             </div>
+
+            {/* Gamification / Streak & Tasks Trigger Button */}
+            <button
+              onClick={() => setIsGamificationOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.2)] transition-all font-semibold"
+              title="Astronavt kunlik vazifalari va streak tizimi"
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span className="hidden md:inline">STREAK &amp; TASKS</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                🔥 5d
+              </span>
+            </button>
+
+            {/* Space Medical Guide / First-Aid Trigger Button */}
+            <button
+              onClick={() => handleOpenMedGuide()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.2)] transition-all font-semibold"
+              title="Sodda tibbiy qo'llanma va favqulodda yordam"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-rose-400" />
+              <span>FIRST-AID</span>
+            </button>
 
             {/* Crew Check-in Trigger Button */}
             <button
@@ -852,6 +920,20 @@ export default function OrbitTelemetryDashboard() {
               >
                 <RefreshCw className="w-3 h-3 text-emerald-400" />
                 <span>Data Sync</span>
+              </button>
+              <button
+                onClick={() => setIsGamificationOpen(true)}
+                className="px-2.5 py-1 rounded bg-[#0d1624] hover:bg-[#15233a] border border-[#1d2d46] text-amber-300 flex items-center gap-1.5 transition-colors"
+              >
+                <Trophy className="w-3 h-3 text-amber-400" />
+                <span>Streak</span>
+              </button>
+              <button
+                onClick={() => handleOpenMedGuide()}
+                className="px-2.5 py-1 rounded bg-[#0d1624] hover:bg-[#15233a] border border-[#1d2d46] text-rose-300 flex items-center gap-1.5 transition-colors"
+              >
+                <BookOpen className="w-3 h-3 text-rose-400" />
+                <span>Med Guide</span>
               </button>
             </div>
           </div>
@@ -1010,8 +1092,8 @@ export default function OrbitTelemetryDashboard() {
             </div>
           </div>
 
-          {/* 4. FOUR HORIZONTAL METRIC CARDS (REAL LIVE STREAMING NUMBERS) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 4. FIVE HORIZONTAL METRIC CARDS (REAL LIVE STREAMING NUMBERS) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
             {/* Card 1: HEART RATE */}
             <div className="bg-[#0b121f] border border-[#182337] rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between shadow-md">
               <div className="flex items-start justify-between">
@@ -1054,7 +1136,7 @@ export default function OrbitTelemetryDashboard() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-mono tracking-wider text-slate-400 uppercase">
-                    OXYGEN SATURATION (SpO2)
+                    OXYGEN (SpO2)
                   </p>
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-3xl font-extrabold text-white tracking-tight">
@@ -1091,7 +1173,7 @@ export default function OrbitTelemetryDashboard() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-mono tracking-wider text-slate-400 uppercase">
-                    CORE TEMPERATURE
+                    CORE TEMP
                   </p>
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-3xl font-extrabold text-white tracking-tight">
@@ -1106,21 +1188,61 @@ export default function OrbitTelemetryDashboard() {
               </div>
 
               <div className="mt-4 pt-3 border-t border-[#162033] flex items-center justify-between text-[11px] font-mono">
-                <span className="text-slate-400">Target Range: 36.5 - 37.5</span>
-                <span className="font-bold tracking-wider text-emerald-400">
+                <span className="text-slate-400">Target: 36.5 - 37.2</span>
+                <span
+                  className="font-bold tracking-wider"
+                  style={{ color: currentMetrics.tempColor }}
+                >
                   {currentMetrics.tempStatus}
                 </span>
               </div>
               <div
                 className="absolute bottom-0 left-0 right-0 h-1 bg-amber-400"
                 style={{
-                  width: `${((currentMetrics.temp - 35) / 5) * 100}%`,
+                  width: `${Math.min(100, Math.max(0, ((currentMetrics.temp - 35) / 5) * 100))}%`,
                   transition: "width 0.5s ease-in-out",
                 }}
               />
             </div>
 
-            {/* Card 4: AMBIENT RADIATION */}
+            {/* Card 4: BLOOD SUGAR (GLUCOSE) */}
+            <div className="bg-[#0b121f] border border-[#182337] rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between shadow-md">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] font-mono tracking-wider text-slate-400 uppercase">
+                    BLOOD SUGAR
+                  </p>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-3xl font-extrabold text-white tracking-tight">
+                      {currentMetrics.sugar}
+                    </span>
+                    <span className="text-xs text-slate-400 font-mono">mg/dL</span>
+                  </div>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                  <Activity className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-[#162033] flex items-center justify-between text-[11px] font-mono">
+                <span className="text-slate-400">Target: 70 - 110</span>
+                <span
+                  className="font-bold tracking-wider"
+                  style={{ color: currentMetrics.sugarColor }}
+                >
+                  {currentMetrics.sugarStatus}
+                </span>
+              </div>
+              <div
+                className="absolute bottom-0 left-0 right-0 h-1 bg-purple-400"
+                style={{
+                  width: `${Math.min(100, Math.max(0, (currentMetrics.sugar / 200) * 100))}%`,
+                  transition: "width 0.5s ease-in-out",
+                }}
+              />
+            </div>
+
+            {/* Card 5: AMBIENT RADIATION */}
             <div className="bg-[#0b121f] border border-[#182337] rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between shadow-md">
               <div className="flex items-start justify-between">
                 <div>

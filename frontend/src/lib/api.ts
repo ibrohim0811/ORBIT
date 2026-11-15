@@ -18,6 +18,8 @@ export interface TelemetryMetrics {
   cumulative_radiation_dose: number;
   current_co2: number;
   sleep_debt_hours: number;
+  current_blood_sugar?: number;
+  current_body_temperature?: number;
 }
 
 export interface AnalyticsData {
@@ -60,6 +62,8 @@ export interface DashboardResponse {
     radiation_level: number | null;
     co2_level: number | null;
     sleep_debt: number | null;
+    blood_sugar: number | null;
+    body_temperature: number | null;
     received_at: string | null;
   };
   risk_budget: {
@@ -68,6 +72,8 @@ export interface DashboardResponse {
     heart_rate: number;
     co2: number;
     sleep: number;
+    blood_sugar?: number;
+    body_temperature?: number;
   } | null;
   recommendation: {
     rule_id: string;
@@ -382,4 +388,60 @@ export async function setSimulatorMode(
 // 13. Known Crews List
 export async function fetchCrews(): Promise<{ crews: string[] }> {
   return request(`/crews`);
+}
+
+// 14. Gamification & Streak API
+export interface TaskItem {
+  task_id: string;
+  title: string;
+  description: string;
+  category: string;
+  points: number;
+  completed: boolean;
+}
+
+export interface BadgeItem {
+  badge_id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  unlocked_at?: number | null;
+}
+
+export interface GamificationState {
+  crew_id: string;
+  streak_days: number;
+  total_points: number;
+  date: string;
+  tasks_completed: number;
+  tasks_total: number;
+  tasks: TaskItem[];
+  badges: BadgeItem[];
+}
+
+export async function fetchGamification(
+  crewId = "CREW-1"
+): Promise<GamificationState> {
+  return request<GamificationState>(`/gamification?crew_id=${encodeURIComponent(crewId)}`);
+}
+
+export async function toggleGamificationTask(
+  crewId: string,
+  taskId: string,
+  completed: boolean
+): Promise<GamificationState> {
+  return request<GamificationState>(`/gamification/task/toggle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ crew_id: crewId, task_id: taskId, completed }),
+  });
+}
+
+export async function resetGamification(
+  crewId = "CREW-1"
+): Promise<GamificationState> {
+  return request<GamificationState>(`/gamification/reset?crew_id=${encodeURIComponent(crewId)}`, {
+    method: "POST",
+  });
 }
