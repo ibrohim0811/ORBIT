@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORBIT — Astronavtlar salomatligini kuzatish tizimi</title>
+<style>
+  :root {
+    --bg: #070b1a;
+    --panel: #0e1530;
+    --line: #1f2b55;
+    --text: #e6ebff;
+    --muted: #97a3c9;
+    --accent: #4fd1ff;
+    --accent2: #8b7bff;
+    --ok: #3ddc97;
+    --warn: #ffc857;
+    --crit: #ff6b6b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 80% -10%, #1a2456 0%, transparent 60%), var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 22px; }
+  section { padding: 84px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 2rem; margin-bottom: 14px; }
+  h2 span { color: var(--accent); }
+  .lead { color: var(--muted); max-width: 720px; margin-bottom: 36px; }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(7, 11, 26, 0.85); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .container { display: flex; align-items: center; justify-content: space-between; height: 58px; }
+  .brand { font-weight: 800; letter-spacing: 3px; color: var(--text); }
+  .brand b { color: var(--accent); }
+  nav ul { display: flex; gap: 18px; list-style: none; font-size: 0.92rem; }
+  nav ul a { color: var(--muted); }
+  nav ul a:hover { color: var(--text); }
+  @media (max-width: 720px) { nav ul { display: none; } }
+
+  /* HERO */
+  .hero { padding: 110px 0 90px; border-top: none; }
+  .tag {
+    display: inline-block; padding: 6px 14px; border: 1px solid var(--line);
+    border-radius: 999px; color: var(--accent); font-size: 0.85rem; margin-bottom: 22px;
+  }
+  .hero h1 { font-size: clamp(2.6rem, 6vw, 4.4rem); line-height: 1.05; letter-spacing: 2px; }
+  .hero h1 span {
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub { font-size: 1.2rem; color: var(--muted); margin: 18px 0 30px; max-width: 680px; }
+  .btn {
+    display: inline-block; padding: 12px 22px; border-radius: 10px; font-weight: 600;
+    margin-right: 10px; margin-bottom: 10px;
+  }
+  .btn.primary { background: var(--accent); color: #04121f; }
+  .btn.ghost { border: 1px solid var(--line); color: var(--text); }
+  .disclaimer {
+    margin-top: 28px; padding: 12px 16px; border-left: 3px solid var(--warn);
+    background: rgba(255, 200, 87, 0.07); color: var(--warn); font-size: 0.9rem; border-radius: 6px;
+    max-width: 720px;
+  }
+
+  /* CARDS */
+  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px;
+  }
+  .card .icon { font-size: 1.6rem; margin-bottom: 10px; }
+  .card h3 { font-size: 1.08rem; margin-bottom: 8px; }
+  .card p { color: var(--muted); font-size: 0.95rem; }
+
+  /* STEPS */
+  .steps { counter-reset: step; display: grid; gap: 14px; }
+  .step {
+    display: flex; gap: 18px; align-items: flex-start;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px;
+  }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    min-width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #04121f; font-weight: 800;
+  }
+  .step h4 { font-size: 1rem; margin-bottom: 2px; }
+  .step p { color: var(--muted); font-size: 0.93rem; }
+
+  /* ARCH */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+    margin-top: 10px;
+  }
+  .node {
+    background: var(--panel); border: 1px solid var(--accent); color: var(--text);
+    padding: 10px 14px; border-radius: 10px; font-size: 0.9rem; text-align: center;
+  }
+  .arrow { color: var(--accent); font-size: 1.2rem; }
+
+  /* TECH */
+  .tech { display: flex; flex-wrap: wrap; gap: 10px; }
+  .pill {
+    padding: 8px 14px; border-radius: 999px; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.9rem;
+  }
+
+  /* RULES */
+  .rules { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .rule { border-left: 4px solid; padding: 14px 18px; background: var(--panel); border-radius: 10px; }
+  .rule.ok { border-color: var(--ok); }
+  .rule.warn { border-color: var(--warn); }
+  .rule.crit { border-color: var(--crit); }
+  .rule strong { display: block; margin-bottom: 4px; }
+  .rule p { color: var(--muted); font-size: 0.93rem; }
+
+  /* STATUS */
+  .status-list { list-style: none; display: grid; gap: 10px; }
+  .status-list li {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 16px; color: var(--muted); font-size: 0.95rem;
+  }
+  .status-list li::before { content: "◦ "; color: var(--accent); }
+
+  footer { padding: 40px 0; color: var(--muted); font-size: 0.88rem; text-align: center; border-top: 1px solid var(--line); }
+  footer em { color: var(--accent); font-style: normal; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="brand"><b>ORBIT</b></div>
+    <ul>
+      <li><a href="#nima">Nima?</a></li>
+      <li><a href="#qanday">Qanday ishlaydi</a></li>
+      <li><a href="#arxitektura">Arxitektura</a></li>
+      <li><a href="#qoidalar">Xavfsizlik</a></li>
+      <li><a href="#holat">Holat</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <span class="tag">NASA Space Apps Challenge 2026 · Prototip</span>
+    <h1><span>ORBIT</span><br>Analyze · Understand · Protect</h1>
+    <p class="sub">
+      Orbital Real-time Biomedical &amp; Telemetry — uzoq kosmik missiyalarda astronavtlar
+      salomatligini real vaqtda kuzatuvchi, internetsiz ham ishlaydigan tizim.
+    </p>
+    <a class="btn primary" href="#qanday">Batafsil</a>
+    <a class="btn ghost" href="#arxitektura">Arxitektura</a>
+    <div class="disclaimer">
+      ⚠️ Bu prototip. U tibbiy diagnoz qo'ymaydi va haqiqiy klinik foydalanish uchun mo'ljallanmagan.
+      Barcha demo ma'lumotlar sun'iy (simulyatsiya).
+    </div>
+  </div>
+</header>
+
+<section id="nima">
+  <div class="container">
+    <h2>Nima <span>uchun</span> kerak?</h2>
+    <p class="lead">
+      Kosmik missiyada aloqa uzilishi, cheklangan internet va jismoniy yuklamaning o'zgarishi bo'lishi mumkin.
+      Shuning uchun oddiy ko'rsatkich emas, balki xavfli o'zgarishlarni aniqlaydigan va tushuntiradigan tizim kerak.
+    </p>
+    <div class="grid">
+      <div class="card"><div class="icon">🛰️</div><h3>Missiyaga mos kuzatuv</h3><p>Har bir ekipaj a'zosi alohida kuzatiladi.</p></div>
+      <div class="card"><div class="icon">📈</div><h3>Trend va baza</h3><p>Yurak urishi, qon bosimi, radiatsiya, CO₂ va uyqu qarzi tahlil qilinadi.</p></div>
+      <div class="card"><div class="icon">⚠️</div><h3>Tushunarli ogohlantirish</h3><p>Har bir signal qaysi qoida asosida chiqqanini ko'rsatadi.</p></div>
+      <div class="card"><div class="icon">💬</div><h3>Ekipaj check-in</h3><p>"Siz yaxshimisiz?" so'rovi va javob tarixga yoziladi.</p></div>
+      <div class="card"><div class="icon">🧠</div><h3>Lokal AI</h3><p>Ollama orqali oldindan yuklangan model hisoblangan natijalarni tushuntiradi.</p></div>
+      <div class="card"><div class="icon">🗂️</div><h3>Missiya tarixi</h3><p>Barcha hodisalar vaqt belgisi bilan saqlanadi va hisobot tayyorlanadi.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="qanday">
+  <div class="container">
+    <h2><span>Qanday</span> ishlaydi?</h2>
+    <p class="lead">Ma'lumot kelishidan tortib to shifokor ko'rib chiqadigan hisobotgacha bo'lgan jarayon.</p>
+    <div class="steps">
+      <div class="step"><div><h4>Missiyani sozlash</h4><p>Davomiylik, ekipaj va missiya bosqichlari belgilanadi.</p></div></div>
+      <div class="step"><div><h4>Telemetriya yig'ish</h4><p>Sensor ma'lumotlari yoki aniq belgilangan simulyatsiya ma'lumotlari qabul qilinadi.</p></div></div>
+      <div class="step"><div><h4>Tahlil</h4><p>Ma'lumot tekshiriladi, bazaga solishtiriladi va trend hisoblanadi.</p></div></div>
+      <div class="step"><div><h4>Xavfni baholash</h4><p>Deterministik qoidalar holatni NORMAL, WARNING yoki CRITICAL deb belgilaydi.</p></div></div>
+      <div class="step"><div><h4>Check-in va eskalatsiya</h4><p>Javob bo'lmasa yoki xavfli bo'lsa, protokol bo'yicha harakat qilinadi.</p></div></div>
+      <div class="step"><div><h4>Hisobot</h4><p>Missiya tugagach, klinitsistlar uchun xronologik hisobot tayyorlanadi.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="arxitektura">
+  <div class="container">
+    <h2>Arxitek<span>tura</span></h2>
+    <p class="lead">Tahlil va xavf baholash qoidalarga asoslanadi; AI faqat tushuntiradi.</p>
+    <div class="flow">
+      <div class="node">Telemetriya<br><small>sensor / simulyator</small></div><span class="arrow">→</span>
+      <div class="node">FastAPI<br><small>qabul + validatsiya</small></div><span class="arrow">→</span>
+      <div class="node">Tahlil<br><small>NumPy / Pandas</small></div><span class="arrow">→</span>
+      <div class="node">Risk engine<br><small>qoidalar</small></div><span class="arrow">→</span>
+      <div class="node">Baza<br><small>SQLite</small></div>
+    </div>
+    <div class="flow" style="margin-top:22px">
+      <div class="node">WebSocket<br><small>real vaqt</small></div><span class="arrow">→</span>
+      <div class="node">Dashboard<br><small>Next.js</small></div>
+      <span class="arrow">&nbsp;&nbsp;</span>
+      <div class="node">Ollama<br><small>ixtiyoriy AI</small></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2>Texnologiya<span>lar</span></h2>
+    <div class="tech" style="margin-top:20px">
+      <span class="pill">Python · FastAPI</span>
+      <span class="pill">NumPy · Pandas</span>
+      <span class="pill">SQLite</span>
+      <span class="pill">WebSocket</span>
+      <span class="pill">Next.js · React · TypeScript</span>
+      <span class="pill">Three.js (3D model)</span>
+      <span class="pill">Ollama (lokal LLM)</span>
+      <span class="pill">Docker</span>
+      <span class="pill">pytest</span>
+    </div>
+  </div>
+</section>
+
+<section id="qoidalar">
+  <div class="container">
+    <h2>Xavfsizlik <span>qoidalari</span></h2>
+    <p class="lead">Asosiy loyiha printsipi: AI xavf haqida qaror qabul qilmaydi.</p>
+    <div class="rules">
+      <div class="rule ok"><strong>Asosiy monitoring AI'siz ishlaydi</strong><p>Ollama to'xtatilganda ham qoidalar ishlashda davom etadi.</p></div>
+      <div class="rule warn"><strong>Yo'qolgan ma'lumot "normal" emas</strong><p>Aloqa uzilsa, holat NORMAL emas, STALE deb belgilanadi.</p></div>
+      <div class="rule crit"><strong>Javob yo'q — ogohlantirish yopilmaydi</strong><p>Ekipajning javobsizligi signalni avtomatik o'chirmaydi.</p></div>
+      <div class="rule ok"><strong>Hodisalar takrorlanmaydi</strong><p>Har bir hodisa barqaror ID bilan yoziladi, dublikat hisoblanmaydi.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="holat">
+  <div class="container">
+    <h2>Loyiha <span>holati</span></h2>
+    <p class="lead">Loyiha hozircha ishlanmoqda. Quyidagilar reja va amaldagi ishlar asosida keltirilgan.</p>
+    <ul class="status-list">
+      <li>Backend: ma'lumot qabul qilish, holat hisoblash va WebSocket oqimi</li>
+      <li>Testlar: qoidalar, API, tahlil va xotira qismlari uchun pytest testlari</li>
+      <li>Frontend: dashboard, 3D model, ekipaj paneli, eslatmalar va check-in oynasi</li>
+      <li>Keyingi bosqich: barqaror ishlash, xatolarni tuzatish va Ollama integratsiyasini mustahkamlash</li>
+      <li>Haqiqiy sensorlar, klinik tasdiqlash va litsenziya hali tayyor emas</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p><em>ORBIT — Analyze · Understand · Protect</em></p>
+    <p style="margin-top:6px">"Uzoq Yer bilan, ma'lumotlaringiz sizni yaqin saqlaydi."</p>
+  </div>
+</footer>
+
+</body>
+</html>
