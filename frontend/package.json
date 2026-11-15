@@ -10,26 +10,26 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint"
   },
   "dependencies": {
     "@swc/helpers": "^0.5.24",
     "caniuse-lite": "^1.0.30001823",
-    "framer-motion": "^14.10.1",
+    "framer-motion": "^12.4.7",
     "lucide-react": "^1.70.0",
-    "next": "15.1.7",
+    "next": "^15.2.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "recharts": "^3.10.1"
+    "recharts": "^2.15.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.5",
+    "@tailwindcss/postcss": "^4.0.9",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.5",
-    "postcss": "^8.5.32",
+    "eslint-config-next": "^15.2.4",
+    "postcss": "^8.5.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

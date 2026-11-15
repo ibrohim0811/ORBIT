@@ -5,8 +5,8 @@ import { type LucideIcon } from "lucide-react";
 
 interface MetricCardProps {
   title: string;
-  value: string | number;
-  unit: string;
+  value: string | number | null | undefined;
+  unit?: string;
   icon: LucideIcon;
   color: "cyan" | "green" | "red" | "orange" | "purple";
   trend?: "up" | "down" | "stable";
@@ -68,7 +68,9 @@ export default function MetricCard({
   subtitle,
   delay = 0,
 }: MetricCardProps) {
-  const c = colorMap[color];
+  const c = colorMap[color] || colorMap.cyan;
+  const hasValue = value !== null && value !== undefined && value !== "";
+  const displayVal = hasValue ? value : "—";
 
   return (
     <motion.div
@@ -87,22 +89,22 @@ export default function MetricCard({
           </span>
         )}
       </div>
-      <p className="text-[10px] uppercase tracking-[0.2em] text-white/30 mb-1">
+      <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 mb-1">
         {title}
       </p>
       <div className="flex items-baseline gap-1.5">
         <motion.span
-          key={String(value)}
+          key={String(displayVal)}
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`text-2xl font-bold font-mono ${c.neon}`}
+          className={`text-2xl font-bold font-mono ${hasValue ? c.neon : "text-white/30"}`}
         >
-          {value}
+          {displayVal}
         </motion.span>
-        <span className="text-xs text-white/30 font-mono">{unit}</span>
+        {unit && hasValue && <span className="text-xs text-white/30 font-mono">{unit}</span>}
       </div>
       {subtitle && (
-        <p className="text-[10px] text-white/20 mt-1.5 font-mono">{subtitle}</p>
+        <p className="text-[10px] text-white/30 mt-1.5 font-mono">{subtitle}</p>
       )}
     </motion.div>
   );

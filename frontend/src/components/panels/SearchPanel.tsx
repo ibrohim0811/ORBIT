@@ -38,15 +38,7 @@ export default function SearchPanel({ crewId, onClose }: SearchPanelProps) {
       const res = await searchTelemetry(crewId, query.trim());
       setSearchResults(res.results || []);
     } catch {
-      // Demo mock fallback
-      setSearchResults([
-        {
-          type: "event",
-          title: "STATUS_CHANGE",
-          text: `Query '${query}' matched threshold state check`,
-          at: new Date().toISOString(),
-        },
-      ]);
+      setSearchResults([]);
     } finally {
       setLoading(false);
     }
@@ -212,6 +204,9 @@ export default function SearchPanel({ crewId, onClose }: SearchPanelProps) {
                     type="number"
                     value={hrMin}
                     onChange={(e) => setHrMin(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleFilterHistory();
+                    }}
                     className="w-full bg-[#060a12] border border-[#1b283d] rounded-lg px-2.5 py-1 text-xs text-rose-400 focus:outline-none focus:border-rose-500 mt-1"
                   />
                 </div>
@@ -222,6 +217,9 @@ export default function SearchPanel({ crewId, onClose }: SearchPanelProps) {
                     step="0.1"
                     value={radMin}
                     onChange={(e) => setRadMin(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleFilterHistory();
+                    }}
                     className="w-full bg-[#060a12] border border-[#1b283d] rounded-lg px-2.5 py-1 text-xs text-purple-400 focus:outline-none focus:border-purple-500 mt-1"
                   />
                 </div>

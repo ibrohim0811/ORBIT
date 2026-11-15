@@ -1,72 +1,29 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, CheckCircle, Info, Bell, XCircle } from "lucide-react";
+import { AlertTriangle, Info, Bell, XCircle, AlertCircle } from "lucide-react";
+import { fetchEvents } from "@/lib/api";
 
-interface Alert {
-  id: string;
-  severity: "info" | "warning" | "critical";
-  message: string;
-  time: string;
-  crewMember?: string;
+interface AlertsFeedProps {
+  crewId?: string;
 }
 
-const mockAlerts: Alert[] = [
-  {
-    id: "1",
-    severity: "info",
-    message: "Telemetry sync completed — 847 data points",
-    time: "21:14:32",
-  },
-  {
-    id: "2",
-    severity: "warning",
-    message: "Eng. Petrov — elevated heart rate detected (95 bpm)",
-    time: "21:12:08",
-    crewMember: "Petrov",
-  },
-  {
-    id: "3",
-    severity: "info",
-    message: "Radiation levels nominal — 0.12 mSv/h",
-    time: "21:10:45",
-  },
-  {
-    id: "4",
-    severity: "info",
-    message: "All crew check-ins received for current cycle",
-    time: "21:05:00",
-  },
-  {
-    id: "5",
-    severity: "warning",
-    message: "CO₂ sensor recalibration recommended",
-    time: "20:58:22",
-  },
-];
+export default function AlertsFeed({ crewId = "CREW-1" }: AlertsFeedProps) {
+  const [events, setEvents] = useState<{ kind: string; detail: string; at: string | null }[]>([]);
+  const [loading, setLoading] = useState(true);
 
-const severityConfig = {
-  info: {
-    icon: Info,
-    borderColor: "border-neon-cyan/20",
-    textColor: "text-neon-cyan",
-    bgColor: "bg-neon-cyan/5",
-  },
-  warning: {
-    icon: AlertTriangle,
-    borderColor: "border-neon-orange/20",
-    textColor: "text-neon-orange",
-    bgColor: "bg-neon-orange/5",
-  },
-  critical: {
-    icon: XCircle,
-    borderColor: "border-neon-red/20",
-    textColor: "text-neon-red",
-    bgColor: "bg-neon-red/5",
-  },
-};
+  useEffect(() => {
+    fetchEvents(crewId, 20)
+      .then((res) => {
+        setEvents(res.events || []);
+      })
+      .catch(() => {
+        setEvents([]);
+      })
+      .finally(() => setLoading(false));
+  }, [crewId]);
 
-export default function AlertsFeed() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -76,41 +33,73 @@ export default function AlertsFeed() {
     >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[10px] uppercase tracking-[0.2em] text-white/30">
-          Mission Log
+          Mission Event Log (GET /events)
         </h3>
         <div className="flex items-center gap-1.5">
-          <Bell className="w-3 h-3 text-white/20" />
-          <span className="text-[9px] font-mono text-white/20">
-            {mockAlerts.length} EVENTS
+          <Bell className="w-3 h-3 text-cyan-400" />
+          <span className="text-[9px] font-mono text-cyan-400">
+            {events.length} EVENTS
           </span>
         </div>
       </div>
+
       <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-        <AnimatePresence>
-          {mockAlerts.map((alert, i) => {
-            const config = severityConfig[alert.severity];
-            const IconComp = config.icon;
-            return (
-              <motion.div
-                key={alert.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.08 }}
-                className={`flex items-start gap-3 p-3 rounded-lg border ${config.borderColor} ${config.bgColor} transition-all hover:bg-white/[0.03]`}
-              >
-                <IconComp className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${config.textColor}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] text-white/70 leading-relaxed">
-                    {alert.message}
-                  </p>
-                  <p className="text-[9px] font-mono text-white/20 mt-1">
-                    {alert.time} UTC
-                  </p>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+        {loading ? (
+          <div className="py-6 text-center text-xs font-mono text-slate-500">
+            Scanning event database...
+          </div>
+        ) : events.length === 0 ? (
+          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-xs font-mono text-slate-500 flex flex-col items-center gap-1.5">
+            <AlertCircle className="w-4 h-4 text-slate-600" />
+            <span>Offline — No event records available</span>
+          </div>
+        ) : (
+          <AnimatePresence>
+            {events.map((ev, i) => {
+              const isCrit = ev.kind.includes("CRITICAL") || ev.kind.includes("ESCALATION");
+              const isWarn = ev.kind.includes("WARNING") || ev.kind.includes("LOS");
+
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className={`flex items-start gap-3 p-3 rounded-lg border transition-all ${
+                    isCrit
+                      ? "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                      : isWarn
+                      ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                      : "bg-white/[0.02] border-white/[0.05] text-slate-300"
+                  }`}
+                >
+                  <div className="p-1 rounded bg-black/40 mt-0.5 shrink-0">
+                    {isCrit ? (
+                      <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                    ) : isWarn ? (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <Info className="w-3.5 h-3.5 text-cyan-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold font-mono tracking-wide">
+                        {ev.kind}
+                      </span>
+                      <span className="text-[9px] font-mono text-slate-500 shrink-0">
+                        {ev.at ? new Date(ev.at).toLocaleTimeString() : "Recent"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-0.5 leading-snug">
+                      {ev.detail}
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        )}
       </div>
     </motion.div>
   );

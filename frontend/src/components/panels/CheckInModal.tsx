@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, UserCheck, AlertTriangle, CheckCircle2, ShieldAlert } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, UserCheck, ShieldAlert, CheckCircle2, Smile, AlertCircle } from "lucide-react";
 import { crewCheckin } from "@/lib/api";
 
 interface CheckInModalProps {
@@ -10,61 +10,173 @@ interface CheckInModalProps {
   onSuccess?: (status: string) => void;
 }
 
+const MOODS = [
+  { value: 1, emoji: "😫", label: "Exhausted" },
+  { value: 2, emoji: "😕", label: "Fatigued" },
+  { value: 3, emoji: "😐", label: "Steady" },
+  { value: 4, emoji: "🙂", label: "Energetic" },
+  { value: 5, emoji: "🚀", label: "Optimal" },
+];
+
+const SYMPTOMS = [
+  { id: "headache", label: "Headache", labelUz: "Bosh og'rig'i" },
+  { id: "nausea", label: "Nausea (SMS)", labelUz: "Ko'ngil aynishi" },
+  { id: "dyspnea", label: "Dyspnea / Shortness of breath", labelUz: "Nafas qisilishi" },
+  { id: "dizziness", label: "Dizziness / Presyncope", labelUz: "Bosh aylanishi" },
+  { id: "insomnia", label: "Insomnia / Sleep Deficit", labelUz: "Uyqusizlik" },
+];
+
 export default function CheckInModal({ crewId, onClose, onSuccess }: CheckInModalProps) {
+  const [selectedMood, setSelectedMood] = useState<number>(4);
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape key and focus
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    dialogRef.current?.focus();
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const toggleSymptom = (symId: string) => {
+    setSelectedSymptoms((prev) =>
+      prev.includes(symId) ? prev.filter((s) => s !== symId) : [...prev, symId]
+    );
+  };
 
   const handleAction = async (status: "OK" | "NEED_HELP") => {
     try {
       setLoading(true);
-      await crewCheckin(crewId, status, note || (status === "OK" ? "All vitals nominal" : "Assistance requested"));
-      setResult(status === "OK" ? "Check-in acknowledged: Nominal (OK)" : "CRITICAL ESCALATION DISPATCHED (NEED_HELP)");
+      const symptomStr = selectedSymptoms.length > 0 ? ` [Symptoms: ${selectedSymptoms.join(", ")}]` : "";
+      const fullNote = `${note || (status === "OK" ? "All vitals nominal" : "Assistance requested")}${symptomStr}`;
+
+      await crewCheckin(crewId, {
+        status,
+        note: fullNote,
+        mood: selectedMood,
+        symptoms: selectedSymptoms,
+      });
+
+      setResult(
+        status === "OK"
+          ? "Check-in acknowledged: Nominal (OK)"
+          : "CRITICAL ESCALATION DISPATCHED (NEED_HELP)"
+      );
+
       if (onSuccess) onSuccess(status);
       setTimeout(() => {
         onClose();
-      }, 2000);
+      }, 1800);
     } catch {
-      setResult(status === "OK" ? "Check-in recorded (Local Edge Mode)" : "Escalation logged to mission timeline");
+      setResult(
+        status === "OK"
+          ? "Check-in recorded (Local Edge Mode)"
+          : "Escalation logged to mission timeline (Edge Mode)"
+      );
       if (onSuccess) onSuccess(status);
       setTimeout(() => {
         onClose();
-      }, 2000);
+      }, 1800);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="bg-[#0b121f] border border-cyan-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative font-sans text-slate-100">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="checkin-title"
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="bg-[#0b121f] border border-cyan-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative font-sans text-slate-100 outline-none"
+      >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
               <UserCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold font-mono tracking-wider text-white">
-                CREW CHECK-IN PROTOCOL
+              <h3 className="text-sm font-bold font-mono tracking-wider text-white" id="checkin-title">
+                CREW HEALTH CHECK-IN &amp; MOOD
               </h3>
               <p className="text-[10px] text-slate-400 font-mono">
-                POST /crew/{crewId}/checkin · NASA Safety Rule
+                POST /crew/{crewId}/checkin · NASA HRP Safety Rule
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white transition-colors"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <p className="text-xs text-slate-300 font-mono mb-4 leading-relaxed">
-          &ldquo;Are you okay? Confirm crew well-being and operational status:&rdquo;
-        </p>
+        {/* 1. Mood Selection */}
+        <div className="mb-4 p-3 rounded-xl bg-[#070c14] border border-[#162234]">
+          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block mb-2">
+            1. Current Psychophysiological Readiness (Mood):
+          </span>
+          <div className="grid grid-cols-5 gap-2">
+            {MOODS.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setSelectedMood(m.value)}
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 border transition-all ${
+                  selectedMood === m.value
+                    ? "bg-cyan-500/20 border-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                    : "bg-[#0b1322] border-[#18263c] text-slate-400 hover:border-slate-500"
+                }`}
+              >
+                <span className="text-xl">{m.emoji}</span>
+                <span className="text-[9px] font-mono tracking-tight">{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
+        {/* 2. Symptom Chips */}
+        <div className="mb-4 p-3 rounded-xl bg-[#070c14] border border-[#162234]">
+          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block mb-2">
+            2. Active Symptoms (Select if applicable):
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {SYMPTOMS.map((s) => {
+              const active = selectedSymptoms.includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleSymptom(s.id)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all border ${
+                    active
+                      ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+                      : "bg-[#0b1322] text-slate-400 border-[#1a283e] hover:border-slate-500"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 3. Clinical Observation Note */}
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Optional notes: e.g. Mild EVA exertion, thermal loop check..."
+          placeholder="Optional flight surgeon note: e.g. Mild EVA exertion, thermal loop variance..."
           rows={2}
           className="w-full bg-[#060a12] border border-[#1b283d] rounded-xl p-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono resize-none mb-4"
         />
@@ -78,9 +190,9 @@ export default function CheckInModal({ crewId, onClose, onSuccess }: CheckInModa
             }`}
           >
             {result.includes("CRITICAL") ? (
-              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
             ) : (
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
             )}
             <span>{result}</span>
           </div>

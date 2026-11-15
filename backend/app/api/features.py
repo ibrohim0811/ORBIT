@@ -1,4 +1,5 @@
 """Frontend paneli uchun API'lar: Dashboard, Search, Notes/Logs, Data Sync, Crew Communication (AI)."""
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -42,7 +43,7 @@ async def dashboard(crew_id: str = Query(T.DEFAULT_CREW_ID)):
         "recommendation": stats["recommendation"] if stats else None,
         "last_checkin": {"status": last_checkin["status"], "at": iso(last_checkin["created_at"])} if last_checkin else None,
         "recent_events": [{"kind": e["kind"], "detail": e["detail"], "at": iso(e["created_at"])} for e in events],
-        "notes_count": len(state.storage.list_notes(crew_id, 500)),
+        "notes_count": state.storage.count_notes(crew_id),
         "pending_sync_samples": state.storage.pending_samples(crew_id),
     }
 
@@ -122,20 +123,19 @@ class ChatInput(BaseModel):
 
 @router.get("/ai/status")
 async def ai_status():
-    """Sarlavhadagi 'AI Engine' holati."""
-    return ai.ollama_status()
+    """Sarlavhadagi 'AI Engine' holati (Event Loop bloklanmasligi uchun to_thread orqali)."""
+    return await asyncio.to_thread(ai.ollama_status)
 
 
 @router.post("/chat")
 async def chat(body: ChatInput, crew_id: str = Query(T.DEFAULT_CREW_ID)):
     """Ekipaj savoli. Javobni Ollama beradi; u o'chiq bo'lsa qoida asosidagi zaxira javob qaytadi."""
-    import asyncio
-
     stats = _status_or_none(crew_id)
     events = state.storage.list_events(crew_id, 5)
     prompt = ai.build_prompt(body.message, stats, events)
     answer = await asyncio.to_thread(ai.ask_ollama, prompt)
+    engine_status = await asyncio.to_thread(ai.ollama_status)
     if answer is None:
-        return {"crew_id": crew_id, "source": "rule_fallback", "engine": ai.ollama_status(),
+        return {"crew_id": crew_id, "source": "rule_fallback", "engine": engine_status,
                 "answer": ai.fallback_answer(stats)}
-    return {"crew_id": crew_id, "source": "ollama", "engine": ai.ollama_status(), "answer": answer}
+    return {"crew_id": crew_id, "source": "ollama", "engine": engine_status, "answer": answer}

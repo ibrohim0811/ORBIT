@@ -92,7 +92,7 @@ def recommendation(status: str, rules: list[tuple[str, str, str]], reasons: list
         rule_id = primary or f"RULE_{status}_CONFIRMED"
     return {
         "rule_id": rule_id,
-        "action": ACTIONS[status],
+        "action": ACTIONS.get(status, "Kuzatishni davom ettiring va sensor holatini tekshiring."),
         "reason": "; ".join(reasons) if reasons else "Barcha ko'rsatkichlar me'yorda.",
         "confidence": "RULE_BASED",
     }

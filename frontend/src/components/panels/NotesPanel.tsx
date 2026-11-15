@@ -6,16 +6,21 @@ import { fetchNotes, addNote, type NoteItem } from "@/lib/api";
 
 interface NotesPanelProps {
   crewId: string;
+  crewName?: string;
   onClose: () => void;
 }
 
-export default function NotesPanel({ crewId, onClose }: NotesPanelProps) {
+export default function NotesPanel({ crewId, crewName, onClose }: NotesPanelProps) {
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [author, setAuthor] = useState("Cmdr. Sarah Stone");
+  const [author, setAuthor] = useState(crewName || "Cmdr. Sarah Stone");
   const [text, setText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (crewName) setAuthor(crewName);
+  }, [crewName, crewId]);
 
   // Close on Escape key
   useEffect(() => {
@@ -32,17 +37,7 @@ export default function NotesPanel({ crewId, onClose }: NotesPanelProps) {
       const res = await fetchNotes(crewId);
       setNotes(res.notes || []);
     } catch {
-      // Fallback local note for demo resilience
-      setNotes([
-        {
-          id: 1,
-          crew_id: crewId,
-          author: "Flight Surgeon",
-          text: "Pre-EVA check complete. Biometric telemetry calibration confirmed.",
-          created_at: Date.now() / 1000 - 3600,
-          at: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ]);
+      setNotes([]);
     } finally {
       setLoading(false);
     }

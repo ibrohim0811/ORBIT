@@ -61,7 +61,7 @@ export default function SyncPanel({ crewId, onClose }: SyncPanelProps) {
     } catch {
       setSyncResult({
         status: "deferred",
-        reason: "LOS: Aloqa yo'q (Loss of Signal). Ma'lumot lokal SQLite navbatida saqlanmoqda.",
+        reason: "LOS active (Loss of Signal). Telemetry packets safely queued in local SQLite edge storage for deferred ground uplink.",
       });
     } finally {
       setSyncing(false);

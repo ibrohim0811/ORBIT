@@ -51,6 +51,16 @@ export interface StatusResponse {
   action_center?: ActionCenterData;
 }
 
+export interface RiskBudget {
+  overall_score: number;
+  radiation_risk_pct: number;
+  heart_rate_risk_pct: number;
+  co2_risk_pct: number;
+  sleep_risk_pct: number;
+  cumulative_radiation_msv: number;
+  formula: string;
+}
+
 export interface DashboardResponse {
   crew_id: string;
   system_status: string;
@@ -60,15 +70,13 @@ export interface DashboardResponse {
     radiation_level: number | null;
     co2_level: number | null;
     sleep_debt: number | null;
+    blood_glucose_mgdl?: number | null;
+    body_temp_c?: number | null;
+    spo2?: number | null;
+    mood?: number | null;
     received_at: string | null;
   };
-  risk_budget: {
-    overall_score: number;
-    radiation: number;
-    heart_rate: number;
-    co2: number;
-    sleep: number;
-  } | null;
+  risk_budget: RiskBudget | null;
   recommendation: {
     rule_id: string;
     action: string;
@@ -144,6 +152,35 @@ export interface TelemetryInput {
   radiation_level?: number;
   co2_level?: number;
   sleep_debt?: number;
+  blood_glucose_mgdl?: number;
+  body_temp_c?: number;
+  spo2?: number;
+  mood?: number;
+}
+
+export interface CheckinInput {
+  status: "OK" | "NEED_HELP";
+  note?: string;
+  mood?: number;
+  symptoms?: string[];
+}
+
+export interface GamificationTask {
+  id: string;
+  title: string;
+  category: "eva" | "nutrition" | "medical" | "exercise";
+  points: number;
+  completed: boolean;
+  cooldown_m?: number;
+}
+
+export interface GamificationData {
+  crew_id: string;
+  level: number;
+  xp: number;
+  next_level_xp: number;
+  streak_days: number;
+  tasks: GamificationTask[];
 }
 
 // Helper fetch with timeout
@@ -293,11 +330,18 @@ export async function fetchSyncStatus(
 }
 
 // 8. Crew Communication / AI Chat API
+interface RawChatResponse {
+  crew_id?: string;
+  source?: "ollama" | "rule_fallback";
+  engine?: string | { engine?: string; state?: string };
+  answer?: string;
+}
+
 export async function sendChatMessage(
   crewId = "CREW-1",
   message: string
 ): Promise<ChatResponse> {
-  const raw = await request<any>(
+  const raw = await request<RawChatResponse>(
     `/chat?crew_id=${encodeURIComponent(crewId)}`,
     {
       method: "POST",
@@ -323,9 +367,15 @@ export async function sendChatMessage(
 }
 
 // 9. AI Status API
+interface RawAiStatusResponse {
+  engine?: string;
+  state?: string;
+  model_available?: boolean;
+}
+
 export async function fetchAiStatus(): Promise<AiStatusResponse> {
   try {
-    const res = await request<any>("/ai/status");
+    const res = await request<RawAiStatusResponse>("/ai/status");
     if (typeof res === "object" && res !== null) {
       return {
         engine: res.engine || "Ollama LLaMA-3",
@@ -345,15 +395,19 @@ export async function fetchAiStatus(): Promise<AiStatusResponse> {
 // 10. Crew Check-in API
 export async function crewCheckin(
   crewId = "CREW-1",
-  status: "OK" | "NEED_HELP",
-  note: string
+  input: CheckinInput
 ): Promise<{ status: string; crew_id: string; checkin_at: string; checkin_status: string }> {
   return request<{ status: string; crew_id: string; checkin_at: string; checkin_status: string }>(
     `/crew/${encodeURIComponent(crewId)}/checkin`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, note }),
+      body: JSON.stringify({
+        status: input.status,
+        note: input.note || (input.status === "OK" ? "All vitals nominal" : "Assistance requested"),
+        mood: input.mood,
+        symptoms: input.symptoms,
+      }),
     }
   );
 }
@@ -382,4 +436,19 @@ export async function setSimulatorMode(
 // 13. Known Crews List
 export async function fetchCrews(): Promise<{ crews: string[] }> {
   return request(`/crews`);
+}
+
+// 14. Gamification API (Optional backend endpoint with offline fallback)
+export async function fetchGamification(crewId = "CREW-1"): Promise<GamificationData> {
+  return request<GamificationData>(`/gamification?crew_id=${encodeURIComponent(crewId)}`);
+}
+
+export async function toggleGamificationTask(taskId: string): Promise<{ status: string; task_id: string; completed: boolean }> {
+  return request(`/gamification/tasks/${encodeURIComponent(taskId)}/toggle`, {
+    method: "POST",
+  });
+}
+
+export async function resetGamification(): Promise<{ status: string }> {
+  return request(`/gamification/reset`, { method: "POST" });
 }

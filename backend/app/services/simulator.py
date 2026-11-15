@@ -13,11 +13,15 @@ MODES = ("normal", "warning", "critical")
 ACCEPTED_INPUT = ("normal", "warning", "critical", "storm")
 
 
+DEFAULT_CREW_IDS = ("CREW-1", "CREW-2", "CREW-3")
+
+
 class TelemetrySimulator:
-    def __init__(self, interval: float = 1.0, crew_id: str = T.DEFAULT_CREW_ID):
+    def __init__(self, interval: float = 1.0, crew_id: str = T.DEFAULT_CREW_ID, crew_ids: tuple[str, ...] = DEFAULT_CREW_IDS):
         self.mode = "normal"
         self.interval = interval
         self.crew_id = crew_id
+        self.crew_ids = tuple(crew_ids)
         self._task: asyncio.Task | None = None
 
     def set_mode(self, mode: str) -> bool:
@@ -27,7 +31,7 @@ class TelemetrySimulator:
         self.mode = mode
         return True
 
-    def generate_point(self) -> dict:
+    def generate_point(self, crew_id: str | None = None) -> dict:
         timestamp = datetime.now(timezone.utc).isoformat()
         if self.mode == "normal":
             ranges = dict(hr=(65, 85), bp=(110, 125), rad=(0.05, 0.3), co2=(0.03, 0.05), sleep=(0.0, 2.0))
@@ -37,7 +41,7 @@ class TelemetrySimulator:
             ranges = dict(hr=(125, 150), bp=(150, 175), rad=(2.2, 4.5), co2=(0.1, 0.15), sleep=(6.0, 10.0))
         return {
             "timestamp": timestamp,
-            "crew_id": self.crew_id,
+            "crew_id": crew_id or self.crew_id,
             "heart_rate": round(random.uniform(*ranges["hr"]), 1),
             "blood_pressure_sys": round(random.uniform(*ranges["bp"]), 1),
             "radiation_level": round(random.uniform(*ranges["rad"]), 3),
@@ -47,7 +51,15 @@ class TelemetrySimulator:
 
     async def _run(self) -> None:
         while True:
-            ingest(self.generate_point())
+            try:
+                target_crews = list(self.crew_ids)
+                if self.crew_id not in target_crews:
+                    target_crews.append(self.crew_id)
+                for cid in target_crews:
+                    ingest(self.generate_point(crew_id=cid))
+            except Exception:
+                # Kutilmagan xatolik fon vazifasini qulatmasligi kerak
+                pass
             await asyncio.sleep(self.interval)
 
     async def start(self) -> None:

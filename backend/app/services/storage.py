@@ -64,9 +64,15 @@ SAMPLE_COLUMNS = (
 
 class Storage:
     def __init__(self, path: str):
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        self._conn = sqlite3.connect(path, timeout=30.0, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        try:
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA synchronous=NORMAL;")
+            self._conn.execute("PRAGMA busy_timeout=30000;")
+        except Exception:
+            pass
         self._conn.executescript(SCHEMA + SCHEMA_EXTRA)
 
     def insert_sample(self, event_id, crew_id, mission_id, received_at, point) -> bool:
@@ -86,7 +92,7 @@ class Storage:
     def load_recent_samples(self, crew_id: str, limit: int) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM (SELECT * FROM samples WHERE crew_id = ? ORDER BY received_at DESC, rowid DESC LIMIT ?) "
+                "SELECT * FROM (SELECT *, rowid FROM samples WHERE crew_id = ? ORDER BY received_at DESC, rowid DESC LIMIT ?) "
                 "ORDER BY received_at ASC, rowid ASC",
                 (crew_id, limit),
             ).fetchall()
@@ -157,6 +163,21 @@ class Storage:
                 (crew_id, limit),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def count_notes(self, crew_id: str) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) AS n FROM notes WHERE crew_id = ?", (crew_id,)
+            ).fetchone()
+        return int(row["n"]) if row else 0
+
+    def prune_old_samples(self, max_age_seconds: float = 86400.0 * 2) -> int:
+        """Eskirgan namunalarni tozalash (xotira va disk cheksiz o'sishining oldini oladi)."""
+        cutoff = time.time() - max_age_seconds
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM samples WHERE received_at < ?", (cutoff,))
+            self._conn.commit()
+            return cur.rowcount
 
     def search(self, crew_id: str, q: str, limit: int = 50) -> list[dict]:
         """Hodisalar, eslatmalar va check-in izohlari bo'yicha matnli qidiruv."""
