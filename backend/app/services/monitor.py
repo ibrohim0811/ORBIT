@@ -21,21 +21,32 @@ class Monitor:
         self._critical_since: dict[str, float] = {}
         self._escalated: set[str] = set()
         self._task: asyncio.Task | None = None
+        self._last_prune: float = 0.0
 
     def tick(self) -> None:
         now = self._clock()
         storage = state.storage
+
+        # Eskirgan namunalarni vaqti-vaqti bilan tozalash (soatiga bir marta)
+        if now - self._last_prune > 3600.0:
+            try:
+                storage.prune_old_samples()
+                self._last_prune = now
+            except Exception:
+                pass
+
         for crew in state.known_crews():
             stats = state.get_analyzer(crew).get_statistics()
             status = stats["system_status"] if stats else "STALE"
             prev = self._prev.get(crew)
 
             if prev is not None and prev != status:
-                storage.add_event(crew, "STATUS_CHANGE", f"{prev} -> {status}", now)
-            if status == "STALE" and prev not in (None, "STALE"):
-                storage.add_event(crew, "LOS_START", "Aloqa uzildi (ma'lumot kelmayapti)", now)
-            if prev == "STALE" and status != "STALE":
-                storage.add_event(crew, "LOS_END", "Aloqa tiklandi", now)
+                if status == "STALE":
+                    storage.add_event(crew, "LOS_START", "Aloqa uzildi (ma'lumot kelmayapti)", now)
+                elif prev == "STALE":
+                    storage.add_event(crew, "LOS_END", "Aloqa tiklandi", now)
+                else:
+                    storage.add_event(crew, "STATUS_CHANGE", f"{prev} -> {status}", now)
 
             if status == "CRITICAL":
                 since = self._critical_since.setdefault(crew, now)
@@ -54,7 +65,7 @@ class Monitor:
 
     def _checked_in_since(self, crew: str, since: float) -> bool:
         last = state.storage.last_checkin(crew)
-        return bool(last and last["created_at"] >= since)
+        return bool(last and last["created_at"] >= since and last.get("status") == "OK")
 
     async def _run(self) -> None:
         while True:

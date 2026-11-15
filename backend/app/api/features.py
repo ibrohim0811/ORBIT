@@ -1,4 +1,5 @@
 """Frontend paneli uchun API'lar: Dashboard, Search, Notes/Logs, Data Sync, Crew Communication (AI)."""
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -12,6 +13,17 @@ router = APIRouter(tags=["Panel"])
 
 def iso(ts: float | None) -> str | None:
     return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts is not None else None
+
+
+def _frontend_risk_budget(rb: dict) -> dict:
+    """Frontend tipi (radiation, heart_rate, co2, sleep) bilan mos keladigan shakl."""
+    return {
+        "overall_score": rb["overall_score"],
+        "radiation": rb["radiation_risk_pct"],
+        "heart_rate": rb["heart_rate_risk_pct"],
+        "co2": rb["co2_risk_pct"],
+        "sleep": rb["sleep_risk_pct"],
+    }
 
 
 def _status_or_none(crew_id: str) -> dict | None:
@@ -38,11 +50,11 @@ async def dashboard(crew_id: str = Query(T.DEFAULT_CREW_ID)):
             "sleep_debt": last_sample["sleep_debt"] if last_sample else None,
             "received_at": iso(last_sample["received_at"]) if last_sample else None,
         },
-        "risk_budget": stats["risk_budget"] if stats else None,
+        "risk_budget": _frontend_risk_budget(stats["risk_budget"]) if stats else None,
         "recommendation": stats["recommendation"] if stats else None,
         "last_checkin": {"status": last_checkin["status"], "at": iso(last_checkin["created_at"])} if last_checkin else None,
         "recent_events": [{"kind": e["kind"], "detail": e["detail"], "at": iso(e["created_at"])} for e in events],
-        "notes_count": len(state.storage.list_notes(crew_id, 500)),
+        "notes_count": state.storage.count_notes(crew_id),
         "pending_sync_samples": state.storage.pending_samples(crew_id),
     }
 
@@ -84,7 +96,8 @@ class NoteInput(BaseModel):
 @router.get("/notes")
 async def list_notes(crew_id: str = Query(T.DEFAULT_CREW_ID), limit: int = Query(50, ge=1, le=500)):
     notes = state.storage.list_notes(crew_id, limit)
-    return {"crew_id": crew_id, "notes": [{**n, "at": iso(n["created_at"])} for n in notes]}
+    return {"crew_id": crew_id,
+            "notes": [{**n, "crew_id": crew_id, "at": iso(n["created_at"])} for n in notes]}
 
 
 @router.post("/notes")
@@ -121,21 +134,22 @@ class ChatInput(BaseModel):
 
 
 @router.get("/ai/status")
-async def ai_status():
-    """Sarlavhadagi 'AI Engine' holati."""
-    return ai.ollama_status()
+async def ai_status() -> str:
+    """Sarlavhadagi 'AI Engine' holati. Frontend oddiy matn kutadi (masalan 'Ollama llama3 (Active)').
+    Event loop bloklanmasligi uchun to_thread orqali."""
+    return await asyncio.to_thread(lambda: ai.engine_label(ai.ollama_status()))
 
 
 @router.post("/chat")
 async def chat(body: ChatInput, crew_id: str = Query(T.DEFAULT_CREW_ID)):
     """Ekipaj savoli. Javobni Ollama beradi; u o'chiq bo'lsa qoida asosidagi zaxira javob qaytadi."""
-    import asyncio
-
     stats = _status_or_none(crew_id)
     events = state.storage.list_events(crew_id, 5)
     prompt = ai.build_prompt(body.message, stats, events)
     answer = await asyncio.to_thread(ai.ask_ollama, prompt)
+    engine_status = await asyncio.to_thread(ai.ollama_status)
+    engine_label = ai.engine_label(engine_status)
     if answer is None:
-        return {"crew_id": crew_id, "source": "rule_fallback", "engine": ai.ollama_status(),
+        return {"crew_id": crew_id, "source": "rule_fallback", "engine": engine_label,
                 "answer": ai.fallback_answer(stats)}
-    return {"crew_id": crew_id, "source": "ollama", "engine": ai.ollama_status(), "answer": answer}
+    return {"crew_id": crew_id, "source": "ollama", "engine": engine_label, "answer": answer}

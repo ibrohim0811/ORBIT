@@ -24,9 +24,10 @@ def iso(ts: float | None) -> str | None:
 
 
 def action_center(status: str, rec: dict) -> dict:
+    key = status.upper() if isinstance(status, str) else status
     return {
         "level": status,
-        "action_required": ACTION_REQUIRED[status],
+        "action_required": ACTION_REQUIRED.get(key, "NOMA'LUM"),
         "instruction": rec["action"],
         "reason": rec["reason"],
         "rule_id": rec["rule_id"],

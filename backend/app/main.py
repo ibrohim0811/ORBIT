@@ -1,5 +1,12 @@
 import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Add backend/app directory to sys.path so imports work regardless of CWD
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,17 +34,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# "*" + allow_credentials=True brauzerda rad etiladi. Shu sababli credentials o'chirilgan
+# va bo'sh ro'yxat bo'lsa "*" o'rniga lokal frontend manzili ishlatiladi.
 ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
     if o.strip()
-]
+] or ["http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_headers=["*"],
 )
 
 app.include_router(telemetry_router)

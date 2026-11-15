@@ -31,6 +31,11 @@ def ollama_status() -> dict:
     return value
 
 
+def engine_label(status: dict) -> str:
+    """Frontend kutgan qisqa matn: masalan 'Ollama llama3 (Active)' yoki 'Ollama llama3 (Offline)'."""
+    return f"{status['engine']} ({status['state']})"
+
+
 def ask_ollama(prompt: str) -> str | None:
     """Ollama'dan javob. Xato bo'lsa None (chaqiruvchi zaxira javobni ishlatadi)."""
     body = json.dumps({"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}).encode()

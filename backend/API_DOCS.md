@@ -66,16 +66,17 @@ Tendentsiya 1 Hz namuna tezligi deb hisoblanadi (nishab × 60 = bpm/daqiqa). Tez
 
 ## Ma'lumotlar bazasi
 
-SQLite (stdlib), fayl yo'li `DATABASE_PATH` muhit o'zgaruvchisida (standart `orbit.db`). Jadvallar: `samples`, `events`, `checkins`. Namunalar cheksiz o'sadi (tozalash/arxivlash hali yo'q).
+PostgreSQL (psycopg 3). Ulanish `DATABASE_URL` muhit o'zgaruvchisida (`postgresql://user:pass@host:5432/db`; `postgresql+asyncpg://` ham qabul qilinadi). Jadvallar: `samples`, `events`, `checkins`, `notes`, `sync_marks`. Eski namunalar (2 kundan eski) har soat avtomatik o'chiriladi.
 
 ## Ishga tushirish
 
 ```bash
 cd backend/app
 python main.py                                  # http://localhost:8000
-DATABASE_PATH=/data/orbit.db python main.py     # bazani tanlash
+DATABASE_URL=postgresql://orbit_user:orbit_password@localhost:5432/orbit_db python main.py
 CORS_ORIGINS=http://localhost:3000 python main.py
-cd .. && pytest                                 # testlar (requirements-dev.txt)
+# Testlar: TEST_DATABASE_URL bo'lishi kerak (alohida baza, u tozalanadi)
+cd .. && TEST_DATABASE_URL=postgresql://orbit_user:orbit_password@localhost:5432/orbit_test pytest
 ```
 
 ## Eslatma
@@ -94,8 +95,8 @@ Ikonkalar tartibi bo'yicha: Notes/Logs, Search, Dashboard, Crew Communication, D
 | Dashboard | GET | `/dashboard?crew_id=` | Bitta so'rovda: holat, so'nggi ko'rsatkichlar, xavf byudjeti, hodisalar, sinxronizatsiya |
 | Data Sync | POST | `/sync?crew_id=` | Yer stansiyasiga yuborish. LOS bo'lsa `deferred` (navbatda qoladi) |
 | Data Sync | GET | `/sync/status?crew_id=` | Aloqa holati, navbatdagi namunalar, oxirgi sinxronizatsiya |
-| Crew Communication | POST | `/chat?crew_id=` | `{message}` yuboriladi. Javobni Ollama beradi, o'chiq bo'lsa `rule_fallback` |
-| Header (AI Engine) | GET | `/ai/status` | Ollama holati: `Active` yoki `Offline` |
+| Crew Communication | POST | `/chat?crew_id=` | `{message}` yuboriladi. Javobda `source` (`ollama` yoki `rule_fallback`) va `engine` (string) |
+| Header (AI Engine) | GET | `/ai/status` | Ollama holati, oddiy string: `Ollama llama3 (Active)` yoki `Ollama llama3 (Offline)` |
 
 Ollama sozlamalari: `OLLAMA_URL` (standart `http://localhost:11434`), `OLLAMA_MODEL` (standart `llama3`).
 Ollama holati 10 soniya keshlanadi. AI tavsiya bermaydi, holatni qoida hisoblaydi: AI faqat tushuntiradi.

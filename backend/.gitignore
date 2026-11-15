@@ -47,7 +47,13 @@ yarn-error.log*
 *.tmp
 *.temp
 
-first-public-login-1dfc7d602759.json__pycache__/
+first-public-login-1dfc7d602759.json
+__pycache__/
 *.pyc
 .env
 .venv/
+
+# Ma'lumotlar bazasi (lokal, repoga kirmasin)
+*.db
+*.db-wal
+*.db-shm

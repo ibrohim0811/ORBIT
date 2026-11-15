@@ -73,10 +73,11 @@ def test_chat_falls_back_when_ollama_offline(monkeypatch):
     body = client.post("/chat?crew_id=CREW-C", json={"message": "Holat qanday?"}).json()
     assert body["source"] == "rule_fallback"
     assert "qoida asosidagi" in body["answer"]
-    assert body["engine"]["state"] == "Offline"
+    assert body["engine"].endswith("(Offline)")
 
 
-def test_ai_status_offline(monkeypatch):
+def test_ai_status_is_plain_string(monkeypatch):
     monkeypatch.setattr(ai, "OLLAMA_URL", "http://127.0.0.1:9")
     ai._STATUS_CACHE.update(at=0.0, value=None)
-    assert client.get("/ai/status").json()["state"] == "Offline"
+    body = client.get("/ai/status").json()
+    assert isinstance(body, str) and "Offline" in body

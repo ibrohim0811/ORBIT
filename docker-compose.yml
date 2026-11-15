@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orbit_user -d orbit_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   backend:
     build: ./backend
@@ -21,9 +26,10 @@ services:
     volumes:
       - ./backend:/app:z
     environment:
-      - DATABASE_URL=postgresql+asyncpg://orbit_user:orbit_password@db:5432/orbit_db
+      - DATABASE_URL=postgresql://orbit_user:orbit_password@db:5432/orbit_db
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:

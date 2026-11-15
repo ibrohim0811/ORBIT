@@ -5,7 +5,7 @@ from core import thresholds as T
 from services.storage import Storage
 from utils.analytics import TelemetryAnalyzer
 
-storage = Storage(os.getenv("DATABASE_PATH", "orbit.db"))
+storage = Storage(os.getenv("DATABASE_URL", "postgresql://orbit_user:orbit_password@localhost:5432/orbit_db"))
 _analyzers: dict[str, TelemetryAnalyzer] = {}
 
 

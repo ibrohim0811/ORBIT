@@ -1,12 +1,13 @@
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 sys.path.insert(0, str(APP_DIR))
-# Testlar haqiqiy bazaga tegmasligi uchun vaqtinchalik SQLite fayli
-os.environ["DATABASE_PATH"] = os.path.join(tempfile.mkdtemp(), "test.db")
+# Testlar alohida test bazasida ishlaydi (TRUNCATE qiladi, asosiy bazaga tegmasin)
+os.environ["DATABASE_URL"] = os.getenv(
+    "TEST_DATABASE_URL", "postgresql://orbit_user:orbit_password@localhost:5432/orbit_test"
+)
 
 import pytest  # noqa: E402
 
