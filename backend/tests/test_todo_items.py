@@ -123,6 +123,18 @@ def test_gamification_endpoints():
     t0_back = next(t for t in uncheck_res["tasks"] if t["task_id"] == task["task_id"])
     assert t0_back["completed"] is False
 
+    # 4. Toggle via path endpoint /gamification/tasks/{task_id}/toggle
+    path_toggle = client.post(
+        f"/gamification/tasks/{task['task_id']}/toggle?crew_id={crew}",
+        json={"completed": True},
+    ).json()
+    t0_path = next(t for t in path_toggle["tasks"] if t["task_id"] == task["task_id"])
+    assert t0_path["completed"] is True
+
+    # 5. Reset endpoint
+    reset_res = client.post(f"/gamification/reset?crew_id={crew}").json()
+    assert reset_res["tasks_completed"] == 0
+
 
 def test_checkin_mood_symptoms_and_behavioral_warning():
     crew = "CREW-TEST-MOOD"

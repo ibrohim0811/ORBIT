@@ -160,10 +160,25 @@ class TaskToggleInput(BaseModel):
     completed: bool = Field(...)
 
 
+class TaskTogglePathBody(BaseModel):
+    completed: bool = Field(True)
+
+
 @router.get("/gamification")
 async def get_gamification(crew_id: str = Query(T.DEFAULT_CREW_ID)):
     """Astronavtning kunlik vazifalari, streak va erishilgan nishonlar holati."""
     return state.storage.get_gamification_state(crew_id)
+
+
+@router.post("/gamification/tasks/{task_id}/toggle")
+async def toggle_task_path(
+    task_id: str,
+    body: TaskTogglePathBody | None = None,
+    crew_id: str = Query(T.DEFAULT_CREW_ID),
+):
+    """Path parametrli vazifa holatini almashtirish: POST /gamification/tasks/{task_id}/toggle?crew_id="""
+    comp = body.completed if body is not None else True
+    return state.storage.toggle_task(crew_id, task_id, comp)
 
 
 @router.post("/gamification/task/toggle")

@@ -102,38 +102,38 @@ SAMPLE_COLUMNS = (
 DEFAULT_TASKS = [
     {
         "task_id": "task_exercise",
-        "title": "2.5 soat trenajyor",
-        "description": "T2 Treadmill & ARED kuch mashqlari (suyak/mushak profilaktikasi)",
+        "title": "Trenajyor 2.5 soat",
+        "description": "T2 Treadmill & ARED kuch mashqlari (suyak va mushak atrofiyasi profilaktikasi)",
         "category": "fitness",
         "points": 30,
     },
     {
         "task_id": "task_hydration",
-        "title": "Suv balansi",
-        "description": "2.5L ionlashtirilgan suv iste'moli va elektrolit nazorati",
+        "title": "Suv ichish",
+        "description": "2.5L ionlashtirilgan suv iste'moli va elektrolit balansi nazorati",
         "category": "hydration",
         "points": 20,
     },
     {
-        "task_id": "task_checkin",
-        "title": "Kunlik tibbiy check-in",
-        "description": "Sog'liq va ruhiy holat bo'yicha rasmiy hisobot",
-        "category": "health",
-        "points": 25,
-    },
-    {
         "task_id": "task_sleep",
-        "title": "8 soat optimal uyqu",
-        "description": "Sirkad ritm va kognitiv dam olish tsikli",
+        "title": "Uyqu",
+        "description": "Kamida 7-8 soatlik to'liq sirkad uyqu va dam olish",
         "category": "recovery",
         "points": 25,
     },
     {
-        "task_id": "task_radiation",
-        "title": "Radiatsiya nazorati",
-        "description": "Shaxsiy dozimetr va modul qalqonlarini ko'rikdan o'tkazish",
+        "task_id": "task_measurement",
+        "title": "O'lchov olish",
+        "description": "Telemetriya va hayotiy ko'rsatkichlarni tekshirish",
         "category": "safety",
         "points": 15,
+    },
+    {
+        "task_id": "task_checkin",
+        "title": "Check-in",
+        "description": "Kunlik salomatlik va ruhiy holat bo'yicha hisobot",
+        "category": "health",
+        "points": 25,
     },
 ]
 
@@ -563,6 +563,7 @@ class Storage:
                     "task_exercise": ("fitness_commander", "Fitness Commander", "Trenajyor mashqlari bajarildi", "Flame"),
                     "task_hydration": ("hydration_hero", "Hydration Hero", "Suv balansi bajarildi", "Droplets"),
                     "task_sleep": ("sleep_guardian", "Sleep Guardian", "Uyqu davri saqlangan", "Moon"),
+                    "task_measurement": ("rad_shield", "Vitals & Radiation Master", "O'lchov olish va telemetriya nazorati bajarildi", "Shield"),
                     "task_radiation": ("rad_shield", "Radiation Shield Master", "Radiatsiya nazorati bajarildi", "Shield"),
                 }
                 if task_id in badge_map:

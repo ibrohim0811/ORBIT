@@ -20,4 +20,10 @@ def ingest(data: dict) -> dict:
         return {"status": "duplicate", "crew_id": crew_id, "event_id": event_id}
 
     analyzer._append(point)
+    # Avtomatik gamifikatsiya: o'lchov olish vazifasini bajarilgan deb belgilash
+    try:
+        state.storage.toggle_task(crew_id, "task_measurement", True)
+        state.storage.toggle_task(crew_id, "task_radiation", True)
+    except Exception:
+        pass
     return {"status": "accepted", "crew_id": crew_id, "event_id": event_id}

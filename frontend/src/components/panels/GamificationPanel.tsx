@@ -38,6 +38,7 @@ export default function GamificationPanel({
 }: GamificationPanelProps) {
   const [data, setData] = useState<GamificationState | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isOfflineDemo, setIsOfflineDemo] = useState(false);
   const [celebrateTask, setCelebrateTask] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -45,8 +46,10 @@ export default function GamificationPanel({
     try {
       const res = await fetchGamification(crewId);
       setData(res);
+      setIsOfflineDemo(false);
     } catch {
-      // Fallback local mock data if offline
+      // Backend umuman ulanmaganda: demo zaxira ma'lumot
+      setIsOfflineDemo(true);
       setData({
         crew_id: crewId,
         streak_days: 5,
@@ -57,43 +60,43 @@ export default function GamificationPanel({
         tasks: [
           {
             task_id: "task_exercise",
-            title: "2.5 soat trenajyor",
-            description: "T2 Treadmill & ARED kuch mashqlari (suyak/mushak profilaktikasi)",
+            title: "Trenajyor 2.5 soat",
+            description: "T2 Treadmill & ARED kuch mashqlari (suyak va mushak profilaktikasi)",
             category: "fitness",
             points: 30,
             completed: true,
           },
           {
             task_id: "task_hydration",
-            title: "Suv balansi",
-            description: "2.5L ionlashtirilgan suv iste'moli va elektrolit nazorati",
+            title: "Suv ichish",
+            description: "2.5L ionlashtirilgan suv va elektrolit balansi nazorati",
             category: "hydration",
             points: 20,
             completed: true,
           },
           {
-            task_id: "task_checkin",
-            title: "Kunlik tibbiy check-in",
-            description: "Sog'liq va ruhiy holat bo'yicha rasmiy hisobot",
-            category: "health",
-            points: 25,
-            completed: true,
-          },
-          {
             task_id: "task_sleep",
-            title: "8 soat optimal uyqu",
-            description: "Sirkad ritm va kognitiv dam olish tsikli",
+            title: "Uyqu",
+            description: "Kamida 7-8 soatlik to'liq sirkad uyqu va dam olish",
             category: "recovery",
             points: 25,
             completed: false,
           },
           {
-            task_id: "task_radiation",
-            title: "Radiatsiya nazorati",
-            description: "Shaxsiy dozimetr va modul qalqonlarini ko'rikdan o'tkazish",
+            task_id: "task_measurement",
+            title: "O'lchov olish",
+            description: "Telemetriya va hayotiy ko'rsatkichlarni tekshirish",
             category: "safety",
             points: 15,
             completed: false,
+          },
+          {
+            task_id: "task_checkin",
+            title: "Check-in",
+            description: "Kunlik salomatlik va ruhiy holat bo'yicha hisobot",
+            category: "health",
+            points: 25,
+            completed: true,
           },
         ],
         badges: [
@@ -247,6 +250,18 @@ export default function GamificationPanel({
 
         {/* Modal Body */}
         <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-[#090e18]">
+          {isOfflineDemo && (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-amber-400 font-bold">⚠️ OFFLINE:</span>
+                <span>Backend ulanmagan — quyidagi vazifalar demo ma'lumot hisoblanadi.</span>
+              </div>
+              <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded text-amber-200 uppercase font-semibold">
+                demo ma'lumot
+              </span>
+            </div>
+          )}
+
           {/* Top Banner: Streak Card + Points Counter */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Streak Hero Card */}
