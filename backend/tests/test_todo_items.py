@@ -122,3 +122,35 @@ def test_gamification_endpoints():
     ).json()
     t0_back = next(t for t in uncheck_res["tasks"] if t["task_id"] == task["task_id"])
     assert t0_back["completed"] is False
+
+
+def test_checkin_mood_symptoms_and_behavioral_warning():
+    crew = "CREW-TEST-MOOD"
+    # First check-in with mood 2
+    res1 = client.post(
+        f"/crew/{crew}/checkin",
+        json={"status": "OK", "note": "Charchoq bor", "mood": 2, "symptoms": ["Charchoq", "Bosh og'rig'i"]},
+    ).json()
+    assert res1["status"] == "recorded"
+    assert res1["mood"] == 2
+    assert "Bosh og'rig'i" in res1["symptoms"]
+
+    # Verify no behavioral warning yet
+    events1 = client.get(f"/events?crew_id={crew}").json()["events"]
+    assert not any(e["type"] == "BEHAVIORAL_WARNING" for e in events1)
+
+    # Second consecutive check-in with mood 1
+    res2 = client.post(
+        f"/crew/{crew}/checkin",
+        json={"status": "OK", "note": "Kayfiyat juda yomon", "mood": 1, "symptoms": ["Uyqusizlik"]},
+    ).json()
+    assert res2["status"] == "recorded"
+
+    # Now BEHAVIORAL_WARNING event must be recorded
+    events2 = client.get(f"/events?crew_id={crew}").json()["events"]
+    assert any(e["type"] == "BEHAVIORAL_WARNING" for e in events2)
+
+    # Check gamification auto-completed task_checkin
+    gam = client.get(f"/gamification?crew_id={crew}").json()
+    checkin_task = next(t for t in gam["tasks"] if t["task_id"] == "task_checkin")
+    assert checkin_task["completed"] is True

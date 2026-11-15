@@ -71,10 +71,34 @@ async def get_system_status(crew_id: str = Query(T.DEFAULT_CREW_ID)):
 @router.post("/crew/{crew_id}/checkin")
 async def crew_checkin(crew_id: str, body: CheckinInput):
     """Ekipaj xavfsizligini tasdiqlaydi. NEED_HELP yuborilsa darhol ESCALATION yoziladi."""
-    ts = state.storage.add_checkin(crew_id, body.status, body.note)
+    ts = state.storage.add_checkin(crew_id, body.status, body.note, mood=body.mood, symptoms=body.symptoms)
     if body.status == "NEED_HELP":
         state.storage.add_event(crew_id, "ESCALATION", f"Ekipaj yordam so'radi: {body.note}", ts)
-    return {"status": "recorded", "crew_id": crew_id, "checkin_at": iso(ts), "checkin_status": body.status}
+
+    # Ketma-ket 2 ta check-in da mood <= 2 bo'lsa BEHAVIORAL_WARNING hodisasi yoziladi
+    recent = state.storage.recent_checkins(crew_id, limit=2)
+    if len(recent) >= 2 and all(r.get("mood") is not None and r["mood"] <= 2 for r in recent):
+        state.storage.add_event(
+            crew_id,
+            "BEHAVIORAL_WARNING",
+            f"Ketma-ket 2 ta check-in da ruhiy tushkunlik / past kayfiyat qayd etildi (kayfiyat <= 2).",
+            ts,
+        )
+
+    # Gamifikatsiya: check-in vazifasini avtomatik bajarish
+    try:
+        state.storage.toggle_task(crew_id, "task_checkin", True)
+    except Exception:
+        pass
+
+    return {
+        "status": "recorded",
+        "crew_id": crew_id,
+        "checkin_at": iso(ts),
+        "checkin_status": body.status,
+        "mood": body.mood,
+        "symptoms": body.symptoms,
+    }
 
 
 @router.get("/events")
@@ -83,7 +107,15 @@ async def list_events(crew_id: str = Query(T.DEFAULT_CREW_ID), limit: int = Quer
     events = state.storage.list_events(crew_id, limit)
     return {
         "crew_id": crew_id,
-        "events": [{"kind": e["kind"], "detail": e["detail"], "at": iso(e["created_at"])} for e in events],
+        "events": [
+            {
+                "kind": e["kind"],
+                "type": e["kind"],
+                "detail": e["detail"],
+                "at": iso(e["created_at"]),
+            }
+            for e in events
+        ],
     }
 
 

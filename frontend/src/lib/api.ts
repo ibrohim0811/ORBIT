@@ -352,14 +352,16 @@ export async function fetchAiStatus(): Promise<AiStatusResponse> {
 export async function crewCheckin(
   crewId = "CREW-1",
   status: "OK" | "NEED_HELP",
-  note: string
-): Promise<{ status: string; crew_id: string; checkin_at: string; checkin_status: string }> {
-  return request<{ status: string; crew_id: string; checkin_at: string; checkin_status: string }>(
+  note: string,
+  mood?: number,
+  symptoms?: string[]
+): Promise<{ status: string; crew_id: string; checkin_at: string; checkin_status: string; mood?: number; symptoms?: string[] }> {
+  return request<{ status: string; crew_id: string; checkin_at: string; checkin_status: string; mood?: number; symptoms?: string[] }>(
     `/crew/${encodeURIComponent(crewId)}/checkin`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, note }),
+      body: JSON.stringify({ status, note, mood, symptoms }),
     }
   );
 }
