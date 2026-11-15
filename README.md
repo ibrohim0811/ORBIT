@@ -1,270 +1,49 @@
-# 🚀 ORBIT — Orbital Real-time Biomedical & Telemetry. 
-# Offline Astronaut Health Monitoring System
-
-> **Analyze · Understand · Protect**  
-> An offline-first health-monitoring prototype designed to support astronaut crews throughout a space mission.
-
-ORBIT is a NASA Space Apps Challenge project concept focused on monitoring astronaut health indicators, detecting unusual patterns, prompting crew check-ins, and preserving a complete mission health timeline for post-mission review.
-
-The goal is not to replace medical professionals or autonomously diagnose disease. ORBIT is designed as a **decision-support prototype**: it combines deterministic data analysis with a local AI assistant so that core monitoring can continue even when internet access is unavailable.
-
----
-
-## ✨ Why ORBIT?
-
-Space missions can involve delayed communications, limited connectivity, and changing physical demands. A monitoring tool should therefore do more than display sensor values: it should identify potentially concerning changes, explain why an alert was raised, and keep an auditable record of what happened.
-
-ORBIT aims to provide:
-
-- 🛰️ **Mission-aware monitoring** for each crew member.
-- 📈 **Trend and baseline analysis** of incoming health telemetry.
-- ⚠️ **Explainable alerts** based on explicit rules and validated thresholds.
-- 💬 **Crew check-ins** when a concerning pattern is detected.
-- 🧠 **Local AI explanations** using a pre-downloaded language model through Ollama.
-- 🔌 **Offline-first operation** with local storage and queued telemetry.
-- 🗂️ **Mission history and post-mission reports** for review by qualified medical personnel.
-
-## 🧭 Mission Workflow
-
-1. **Configure a mission** — define its duration, crew members, mission phases, and monitoring profile.
-2. **Generate a mission roadmap** — ORBIT can draft a structured monitoring schedule. The roadmap is validated against configured rules before use.
-3. **Collect telemetry** — receive sensor data or use clearly labelled simulated data for the prototype.
-4. **Analyze incoming measurements** — validate data, compare it with the crew member's baseline, and calculate trends.
-5. **Evaluate risk** — a deterministic risk engine checks configured, documented rules and classifies events.
-6. **Check in with the crew** — when appropriate, ask “Are you okay?” and record the crew member's response or lack of response.
-7. **Record every event** — store measurements, alerts, timestamps, responses, and actions in the mission timeline.
-8. **Review after the mission** — produce a chronological report that helps qualified clinicians assess the mission's health events.
-
-> **Safety principle:** The local language model is not the sole source of risk decisions. Core alerts must work without Ollama, and a missing crew response must never automatically clear an alert.
-
-## 🏗️ Proposed Architecture
-
-```mermaid
-flowchart TD
-    A[Telemetry Sources<br/>Sensors or Simulated Data] --> B[FastAPI Ingestion API]
-    B --> C[Validation and Timestamping]
-    C --> D[NumPy / Pandas<br/>Trend and Baseline Analysis]
-    D --> E[Deterministic Risk Engine]
-    E --> F[Mission Event Database]
-    E --> G[Alert and Crew Check-in Service]
-    G --> F
-    E --> H[Ollama Local LLM<br/>Optional Explanation]
-    H --> I[FastAPI WebSocket Gateway]
-    G --> I
-    F --> J[Mission Dashboard and Timeline]
-    I --> J
-    F --> K[Post-Mission Report]
-```
-
-### Main components
-
-| Component | Responsibility |
-|---|---|
-| **FastAPI** | API endpoints, telemetry ingestion, mission configuration, and service coordination |
-| **NumPy / Pandas** | Data cleaning, rolling statistics, trend analysis, baseline comparison, and anomaly features |
-| **Risk Engine** | Rule-based evaluation using documented and appropriately validated thresholds |
-| **Ollama** | Runs a pre-downloaded local language model to explain recorded findings in plain language |
-| **WebSocket** | Pushes new measurements, alerts, and check-in status to connected dashboards in real time |
-| **Database** | Stores mission configuration, telemetry, alerts, crew responses, and event history |
-| **Dashboard** | Displays crew status, trends, alerts, mission progress, and post-mission summaries |
-
-WebSockets provide live updates, but they are not the database or the only delivery mechanism. The backend should persist events first, handle reconnects, and support replay or resynchronization after a connection returns.
-
-## 🧠 Hybrid AI: Rules + Local LLM
-
-ORBIT separates **risk evaluation** from **natural-language explanation**.
-
-- **Deterministic analysis:** validates measurements, calculates trends, and evaluates documented rules.
-- **Local AI (Ollama):** summarizes already-computed findings, explains why a rule fired, and formats a draft mission plan or report.
-- **Human oversight:** high-risk events follow a defined escalation protocol and remain visible to the appropriate crew or medical authority.
-
-The local model must not invent measurements, silently change risk thresholds, prescribe treatment, or override a critical rule. AI-generated roadmap content should be schema-validated, checked against mission constraints, versioned, and approved before it becomes operational.
-
-### Offline behaviour
-
-- Download the model before going offline.
-- Keep essential monitoring and alert rules independent of the LLM.
-- Store data locally when the network is unavailable.
-- Queue outgoing updates and synchronize them safely when connectivity returns.
-- Use timestamps, stable event IDs, and idempotent writes to avoid duplicate records.
-- Test CPU/RAM requirements and response time on the intended hardware.
-
-“Offline-capable” means the required model and dependencies are already installed locally; it does not mean that every model runs on every device without resource constraints.
-
-## 📡 Real-Time Monitoring and Crew Check-ins
-
-When a rule identifies a potentially concerning measurement or trend, ORBIT can:
-
-1. Record the triggering data and rule.
-2. Send a dashboard alert over WebSocket.
-3. Prompt the crew member with a short check-in, such as **“Are you okay?”**
-4. Record the response, timestamp, and any reported symptoms.
-5. Escalate according to the configured protocol if the response is concerning or absent.
-
-Thresholds must be based on relevant medical and spaceflight guidance, not chosen arbitrarily. A prototype may use synthetic thresholds for demonstration, but they must be clearly labelled as simulated and **not suitable for real clinical use**.
-
-## 🗃️ Mission Data and Post-Mission Review
-
-A mission event should preserve enough context to understand what happened later. Depending on the implementation, records may include:
-
-- Mission ID and crew member ID
-- Measurement type, value, unit, and timestamp
-- Data source and quality/validity status
-- Baseline or trend features used in the evaluation
-- Rule ID, risk category, and explanation
-- Crew check-in prompt and response
-- Acknowledgements and recorded actions
-- Synchronization status and audit timestamps
-
-After the mission, ORBIT can generate a timeline of events, highlight recurring patterns, summarize responses, and prepare a report for review by qualified medical professionals. The report supports clinical assessment; it does **not** independently determine a diagnosis or treatment.
-
-## 🧰 Proposed Technology Stack
-
-| Layer | Technology |
-|---|---|
-| Backend API | Python, FastAPI |
-| Data analysis | NumPy, Pandas |
-| Local language model | Ollama + a locally downloaded model |
-| Live updates | WebSocket |
-| Persistence | SQLite for a simple prototype; PostgreSQL for a multi-user deployment |
-| Frontend | React / Next.js / Vite (choose based on the team’s implementation) |
-| Testing | pytest, API/integration tests, simulated telemetry scenarios |
-| Deployment | Local Linux environment; Docker optional |
-
-The stack is a proposed implementation plan and may change as the prototype evolves.
-
-## 📁 Suggested Project Structure
-
-```text
-orbit/
-├── app/
-│   ├── main.py
-│   ├── api/
-│   │   ├── missions.py
-│   │   ├── telemetry.py
-│   │   ├── alerts.py
-│   │   └── reports.py
-│   ├── core/
-│   │   ├── config.py
-│   │   └── logging.py
-│   ├── schemas/
-│   │   ├── mission.py
-│   │   ├── telemetry.py
-│   │   └── alert.py
-│   ├── services/
-│   │   ├── ingestion.py
-│   │   ├── analysis.py
-│   │   ├── risk_engine.py
-│   │   ├── local_ai.py
-│   │   ├── roadmap.py
-│   │   └── reporting.py
-│   ├── realtime/
-│   │   └── websocket_manager.py
-│   ├── db/
-│   │   ├── models.py
-│   │   ├── session.py
-│   │   └── repositories.py
-│   └── simulation/
-│       └── telemetry_generator.py
-├── tests/
-│   ├── test_analysis.py
-│   ├── test_risk_engine.py
-│   ├── test_telemetry_api.py
-│   └── test_offline_mode.py
-├── frontend/
-├── docs/
-│   ├── architecture.md
-│   └── safety-and-data-notes.md
-├── .env.example
-├── .gitignore
-├── pyproject.toml
-└── README.md
-```
-
-This is a suggested structure, not a claim that all modules have already been implemented.
-
-## 🚦 Development Roadmap
-
-### Phase 1 — Working monitoring foundation
-- [ ] Define mission, crew, telemetry, and event schemas.
-- [ ] Create a simulated telemetry generator.
-- [ ] Implement FastAPI ingestion and validation.
-- [ ] Add baseline/trend analysis and unit tests.
-- [ ] Persist measurements and events.
-
-### Phase 2 — Risk and real-time interface
-- [ ] Implement a documented rule-based risk engine.
-- [ ] Add WebSocket events and reconnection handling.
-- [ ] Build crew status, alert, and mission timeline views.
-- [ ] Implement the check-in workflow and no-response escalation.
-
-### Phase 3 — Offline local AI
-- [ ] Integrate Ollama as an optional local service.
-- [ ] Validate model output against strict schemas.
-- [ ] Generate draft mission roadmaps and event explanations.
-- [ ] Confirm core monitoring works when Ollama is stopped.
-- [ ] Measure resource use and latency on target hardware.
-
-### Phase 4 — Mission closeout and demonstration
-- [ ] Generate post-mission event timelines and summaries.
-- [ ] Test network loss, reconnects, duplicate messages, and corrupted data.
-- [ ] Demonstrate a simulated 30-day mission using accelerated playback.
-- [ ] Document limitations and prepare the challenge presentation.
-
-## 🧪 Example Demonstration Scenario
-
-1. Create a simulated 30-day mission with several crew members.
-2. Stream synthetic health telemetry through the ingestion API.
-3. Inject a documented test scenario that triggers a warning.
-4. Show the alert appearing on the dashboard in real time.
-5. Record the crew check-in response.
-6. Disconnect the network and verify local monitoring and persistence continue.
-7. Stop Ollama and verify that core risk rules still operate.
-8. Complete the simulated mission and generate a post-mission report.
-
-All demonstration data must be labelled **synthetic**. This scenario is for software evaluation, not clinical validation.
-
-## 🔐 Privacy, Reliability, and Safety
-
-- Minimize personal and health data collected.
-- Protect access to crew and mission records.
-- Keep an auditable record of alerts and actions.
-- Validate data quality before analysis.
-- Do not treat missing, stale, or invalid sensor data as a normal reading.
-- Do not allow an LLM response to suppress a deterministic critical alert.
-- Test failure modes, including unavailable AI, dropped connections, and database errors.
-- Have any thresholds or medical interpretations reviewed by appropriately qualified experts before any real-world use.
-
-## 👥 Team Contributions
-
-ORBIT is intended to be developed collaboratively. Suggested workstreams:
-
-- **Backend & Local AI:** FastAPI, Ollama integration, roadmap generation, service orchestration.
-- **Telemetry & Analytics:** simulated data, validation, NumPy/Pandas analysis, test cases.
-- **Realtime & Persistence:** WebSockets, event history, synchronization, alert delivery.
-- **Frontend & UX:** mission setup, dashboard, check-ins, and reports.
-- **Integration & Research:** testing, evidence for thresholds, documentation, and presentation.
-
-Assign owners and acceptance criteria for each module before parallel development begins.
-
-## 🏆 Challenge Context
-
-**Event:** NASA Space Apps Challenge 2026  
-**Challenge:** *Create Health Monitoring Software for Astronauts on Space Missions*
-
-ORBIT is a challenge prototype concept. Any claims about operational readiness, medical accuracy, or suitability for spaceflight require evidence and validation beyond a demonstration.
-
-## 📄 Project Status
-
-**Status:** Architecture and development plan
-
-The proposed features and structure above describe the intended design. Update this section as modules are implemented and tested; do not present planned functionality as completed functionality.
-
-## 📜 License
-
-Choose and add a license before publicly distributing the project. Make sure all model, dataset, icon, and third-party dependency licenses are compatible with your intended use.
-
----
-
-**ORBIT — Analyze · Understand · Protect**  
+# ORBIT: Orbital Real-time Biomedical & Telemetry
+**Analyze · Understand · Protect**
 *When Earth is far, your data keeps you close.*
+
+NASA Space Apps Challenge 2026: Create Health Monitoring Software for Astronauts on Space Missions
+
+## The problem
+On long missions to the Moon and Mars, astronauts face radiation, isolation, communication delay, altered gravity and a closed environment. These hazards change blood pressure, heart rate, glucose, temperature, sleep and mood. With a communication delay, a flight surgeon cannot always respond in time, so the crew must be able to assess their own health.
+
+## Our solution
+ORBIT is an offline-first health monitoring and decision-support tool that works on board, without internet. It collects health indicators, compares them with documented thresholds, explains each alert in plain language, prompts crew check-ins, and records everything for post-mission medical review.
+
+## Key features
+- **Interactive anatomy.** Click the brain, heart, lungs or skeleton to see that system's function, current indicators, status and recommended actions.
+- **Live vitals dashboard.** Heart rate, blood pressure, blood glucose, body temperature, sleep, mood, radiation and cabin CO₂ with dynamic charts and green / amber / red status at a glance.
+- **Explainable rule engine.** Every alert shows which rule fired, which value triggered it and what to do. A status changes only after 3 consecutive confirming samples, so single sensor spikes do not cause false alarms.
+- **Crew check-in.** When a concerning pattern appears, ORBIT asks "Are you okay?" and records OK / NEED HELP, mood and symptoms. A "NEED HELP" answer never cancels an escalation. A missing response escalates.
+- **Local AI assistant (optional).** A pre-downloaded Ollama model explains findings in plain language. It never decides risk. If Ollama is off, rule-based answers take over.
+- **Loss-of-signal handling.** No data is never shown as "normal". The state becomes STALE, readings are queued locally and synced when the link returns.
+- **Medical guide.** For each of NASA's five spaceflight hazards: which indicators it affects, why they are measured, when to contact flight surgeons and how to prevent problems.
+- **Gamification.** Daily health tasks (exercise, hydration, sleep, measurements, check-in), points, streaks and badges keep the crew engaged.
+- **Environments.** Switch between spacecraft, station, rover and surface base profiles.
+- **Post-mission report.** Chronological event timeline, worst states, check-in responses, cumulative radiation dose and per-indicator statistics.
+
+## How it maps to NASA's five hazards
+| Hazard | Indicators in ORBIT | Example action |
+|---|---|---|
+| Space radiation | Radiation rate, cumulative dose | Move to shielded area |
+| Isolation and confinement | Mood, sleep, check-ins | Contact crew or ground, adjust schedule |
+| Distance from Earth | Link status (LOS), local queue | Continue local monitoring, sync later |
+| Gravity fields | Heart rate, blood pressure, skeletal view | Exercise protocol |
+| Hostile closed environment | Cabin CO₂, temperature, SpO₂ | Check ventilation |
+
+## Architecture
+Telemetry (sensors or simulator) → FastAPI ingestion with validation and idempotent event IDs → trend and baseline analysis (NumPy / Pandas) → deterministic risk engine → SQLite event store → WebSocket gateway → Next.js dashboard. The optional Ollama assistant reads already-computed results and only explains them.
+
+## Tech stack
+Python, FastAPI, NumPy, Pandas, SQLite, WebSocket, Ollama (optional), Next.js 15, React, Recharts, Framer Motion, Tailwind CSS, Docker, pytest.
+
+## Safety and honesty
+- All demo data is **synthetic**.
+- Thresholds are demonstration values. They must be reviewed by medical and spaceflight experts before any real use. ORBIT is decision support, not a diagnostic device.
+- Core alerts work without AI and without internet.
+
+## Quick start
+docker compose up (verify these commands match your docker-compose.yml). Then open the frontend, choose a crew member and switch the simulator between normal, warning and critical modes to see the dashboard, anatomy view and check-in flow react.
+
+## Demo scenario
+A simulated 30-day mission runs in accelerated time: a radiation storm raises the dose, sleep debt builds, glucose fluctuates, an alert appears, the crew member checks in, the link drops and monitoring continues offline, then the post-mission report is generated.

@@ -121,4 +121,17 @@ async def list_events(crew_id: str = Query(T.DEFAULT_CREW_ID), limit: int = Quer
 
 @router.get("/crews")
 async def list_crews():
-    return {"crews": state.known_crews()}
+    crews = state.known_crews()
+    details = []
+    for cid in crews:
+        latest = state.storage.latest_sample(cid)
+        stats = state.get_analyzer(cid).get_statistics()
+        details.append({
+            "id": cid,
+            "crew_id": cid,
+            "name": f"Astronavt {cid}",
+            "role": "Commander" if cid == "CREW-1" else "Mission Specialist",
+            "status": stats["system_status"] if stats else "STALE",
+            "heart_rate": round(latest["heart_rate"], 1) if latest else 75.0,
+        })
+    return {"crews": crews, "crew_details": details}

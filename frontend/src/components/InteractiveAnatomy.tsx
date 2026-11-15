@@ -15,17 +15,18 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-export type AnatomicalRegion = "brain" | "heart" | "lungs" | "skeleton";
+export type AnatomicalRegion = "brain" | "heart" | "lungs" | "skeleton" | "immune";
 
 interface InteractiveAnatomyProps {
-  heartRate?: number;
-  bloodPressureSys?: number;
-  radiationLevel?: number;
-  cumulativeDose?: number;
-  co2Level?: number;
-  sleepDebt?: number;
-  bloodSugar?: number;
-  bodyTemperature?: number;
+  heartRate?: number | null;
+  bloodPressureSys?: number | null;
+  radiationLevel?: number | null;
+  cumulativeDose?: number | null;
+  co2Level?: number | null;
+  sleepDebt?: number | null;
+  bloodSugar?: number | null;
+  bodyTemperature?: number | null;
+  mood?: number | null;
   systemStatus?: string;
   onOpenMedGuide?: (hazardKey?: string) => void;
 }
@@ -39,34 +40,46 @@ export default function InteractiveAnatomy({
   sleepDebt = 1.2,
   bloodSugar = 94,
   bodyTemperature = 36.8,
+  mood = 4,
   systemStatus = "NORMAL",
   onOpenMedGuide,
 }: InteractiveAnatomyProps) {
   const [selectedRegion, setSelectedRegion] = useState<AnatomicalRegion>("heart");
   const [hoveredRegion, setHoveredRegion] = useState<AnatomicalRegion | null>(null);
 
+  const safeSleep = sleepDebt ?? 1.0;
+  const safeHr = heartRate ?? 75;
+  const safeBp = bloodPressureSys ?? 120;
+  const safeCo2 = co2Level ?? 0.04;
+  const safeRad = radiationLevel ?? 0.12;
+  const safeTemp = bodyTemperature ?? 36.8;
+  const safeSugar = bloodSugar ?? 95;
+
   // Region specific health evaluations
   const regionData = {
     brain: {
-      name: "Miya & Neyrologik Tizim",
+      name: "Miya & Neyro-kognitiv Tizim",
       latin: "Cerebrum & Neuro-Cognitive",
       icon: Brain,
       color: "text-purple-400",
       borderColor: "border-purple-500/40",
       glowColor: "rgba(168, 85, 247, 0.4)",
       badgeBg: "bg-purple-500/10 text-purple-300 border-purple-500/30",
-      status: sleepDebt > 5 ? "CRITICAL" : sleepDebt > 3 ? "WARNING" : "NORMAL",
+      status: safeSleep > 5 || (mood !== null && mood !== undefined && mood <= 2) ? "CRITICAL" : safeSleep > 3 ? "WARNING" : "NORMAL",
       summary:
-        sleepDebt > 5
+        safeSleep > 5
           ? "Og'ir uyqu qarzi va kognitiv charchoq aniqlandi. Reaksiya tezligi 40% pasaygan."
-          : sleepDebt > 2
+          : mood !== null && mood !== undefined && mood <= 2
+          ? "Ruhiy zo'riqish va past kayfiyat qayd etildi. Izolyatsiya xavfi (NASA BHP)."
+          : safeSleep > 2
           ? "O'rtacha uyqu qarzi. Kognitiv yuklama nazorat ostida."
           : "Neyro-kognitiv holat optimal. Sirkad ritm va diqqat barqaror.",
       metrics: [
-        { label: "Uyqu Qarzi", value: `${sleepDebt} h`, normal: "< 2.0 h", warning: sleepDebt > 3 },
-        { label: "Kognitiv Stress", value: sleepDebt > 4 ? "Yuqori (78%)" : "Me'yorda (24%)", normal: "< 40%", warning: sleepDebt > 3 },
-        { label: "Neyro-reaksiya", value: sleepDebt > 4 ? "420 ms" : "210 ms", normal: "< 250 ms", warning: sleepDebt > 4 },
+        { label: "Uyqu Qarzi", value: sleepDebt !== null && sleepDebt !== undefined ? `${sleepDebt} h` : "—", normal: "< 2.0 h", warning: safeSleep > 3 },
+        { label: "Kayfiyat (Mood)", value: mood !== null && mood !== undefined ? `${mood}/5` : "—", normal: "3-5 ball", warning: mood !== null && mood !== undefined && mood <= 2 },
+        { label: "Neyro-reaksiya", value: safeSleep > 4 ? "420 ms" : "210 ms", normal: "< 250 ms", warning: safeSleep > 4 },
       ],
+      hazardNote: "Izolyatsiya va Yerdan masofa xavfi: Yopiq modulda uzoq muddat yashash sirkad ritm va ruhiy salomatlikka bosim o'tkazadi.",
       hazardKey: "sleep",
     },
     heart: {
@@ -77,62 +90,86 @@ export default function InteractiveAnatomy({
       borderColor: "border-rose-500/40",
       glowColor: "rgba(244, 63, 94, 0.4)",
       badgeBg: "bg-rose-500/10 text-rose-300 border-rose-500/30",
-      status: heartRate > 120 || bloodPressureSys > 150 ? "CRITICAL" : heartRate > 100 ? "WARNING" : "NORMAL",
+      status: safeHr > 120 || safeBp > 150 ? "CRITICAL" : safeHr > 100 ? "WARNING" : "NORMAL",
       summary:
-        heartRate > 120
+        safeHr > 120
           ? "Taxikardiya: Yurak urishi kritik darajada yuqori. Kardio zo'riqish kuzatilmoqda."
-          : heartRate > 100
+          : safeHr > 100
           ? "Yurak urishi tezlashgan. Fiziologik yuklamani kamaytirish lozim."
           : "Yurak-qon tomir faoliyati to'liq barqaror. Ritm va bosim me'yorda.",
       metrics: [
-        { label: "Puls (Heart Rate)", value: `${heartRate} bpm`, normal: "60-100 bpm", warning: heartRate > 100 },
-        { label: "Qon Bosimi (Sys)", value: `${bloodPressureSys} mmHg`, normal: "110-130", warning: bloodPressureSys > 140 },
-        { label: "Kardio Yuklama", value: heartRate > 110 ? "85%" : "32%", normal: "< 50%", warning: heartRate > 100 },
+        { label: "Puls (Heart Rate)", value: heartRate !== null && heartRate !== undefined ? `${heartRate} bpm` : "—", normal: "60-100 bpm", warning: safeHr > 100 },
+        { label: "Qon Bosimi (Sys)", value: bloodPressureSys !== null && bloodPressureSys !== undefined ? `${bloodPressureSys} mmHg` : "—", normal: "110-130", warning: safeBp > 140 },
+        { label: "Kardio Yuklama", value: safeHr > 110 ? "85%" : "32%", normal: "< 50%", warning: safeHr > 100 },
       ],
+      hazardNote: "Gravitatsiya o'zgarishi: Suyuqlik tana yuqori qismiga ko'tariladi ('puffy face'), yurak mushaklarining atrofiyasi kuzatilishi mumkin.",
       hazardKey: "heart",
     },
     lungs: {
-      name: "O'pka & Moddalar Almashinuvi",
-      latin: "Pulmonary & Metabolic",
+      name: "O'pka & Metabolizm (Qon Shakari)",
+      latin: "Pulmonary & Blood Glucose",
       icon: Wind,
       color: "text-cyan-400",
       borderColor: "border-cyan-500/40",
       glowColor: "rgba(6, 182, 212, 0.4)",
       badgeBg: "bg-cyan-500/10 text-cyan-300 border-cyan-500/30",
-      status: co2Level > 0.1 || bloodSugar > 160 || bloodSugar < 60 ? "CRITICAL" : co2Level > 0.07 ? "WARNING" : "NORMAL",
+      status: safeCo2 > 0.1 || safeSugar > 180 || safeSugar < 54 ? "CRITICAL" : safeCo2 > 0.07 || safeSugar > 140 || safeSugar < 70 ? "WARNING" : "NORMAL",
       summary:
-        co2Level > 0.08
+        safeCo2 > 0.08
           ? "Kabina havosida CO2 konsentratsiyasi yuqori. Giperkapniya va nafas zo'riqishi xavfi."
-          : bloodSugar > 140
+          : safeSugar > 180 || safeSugar < 54
+          ? "Qon glyukozasida kritik og'ish! Gipoglikemiya yoki o'tkir giperglikemiya."
+          : safeSugar > 140 || safeSugar < 70
           ? "Qon shakar miqdorida og'ish kuzatilmoqda. Metabolik kompensatsiya talab etiladi."
-          : "Nafas olish va kabina gaz almashinuvi a'lo darajada. Kislorod to'yinishi to'liq.",
+          : "Nafas olish va moddalar almashinuvi to'liq me'yorda.",
       metrics: [
-        { label: "Kabina CO2", value: `${co2Level}%`, normal: "< 0.06%", warning: co2Level > 0.07 },
-        { label: "Qon Shakari", value: `${bloodSugar} mg/dL`, normal: "70-110", warning: bloodSugar > 125 || bloodSugar < 70 },
-        { label: "SpO2 To'yinish", value: co2Level > 0.08 ? "94%" : "98.5%", normal: "> 96%", warning: co2Level > 0.08 },
+        { label: "Kabina CO2", value: co2Level !== null && co2Level !== undefined ? `${co2Level}%` : "—", normal: "< 0.06%", warning: safeCo2 > 0.07 },
+        { label: "Qon Glyukozasi", value: bloodSugar !== null && bloodSugar !== undefined ? `${bloodSugar} mg/dL` : "—", normal: "70-140", warning: safeSugar > 140 || safeSugar < 70 },
+        { label: "SpO2 To'yinish", value: safeCo2 > 0.08 ? "94%" : "98.5%", normal: "> 96%", warning: safeCo2 > 0.08 },
       ],
+      hazardNote: "Yopiq muhit (Hostile Environment): Konveksiya yo'qligi tufayli CO2 astronavt boshi atrofida cho'ntak hosil qiladi.",
       hazardKey: "co2",
     },
     skeleton: {
-      name: "Suyak, Tana & Radiatsiya Qalqoni",
-      latin: "Musculoskeletal & Thermoregulation",
+      name: "Skelet & Mushak Tizimi",
+      latin: "Musculoskeletal System (Bone Density)",
       icon: Shield,
       color: "text-amber-400",
       borderColor: "border-amber-500/40",
       glowColor: "rgba(245, 158, 11, 0.4)",
       badgeBg: "bg-amber-500/10 text-amber-300 border-amber-500/30",
-      status: radiationLevel > 2.0 || bodyTemperature > 38.5 ? "CRITICAL" : radiationLevel > 1.0 || bodyTemperature > 37.5 ? "WARNING" : "NORMAL",
+      status: safeRad > 2.0 || safeTemp > 38.5 ? "CRITICAL" : safeRad > 1.0 || safeTemp > 37.5 ? "WARNING" : "NORMAL",
       summary:
-        radiationLevel > 1.5
-          ? "Yuqori radiatsiya foni! Dozimetr nurlanish o'sishini qayd etmoqda. Zudlik bilan himoyalanish zarur."
-          : bodyTemperature > 37.5
-          ? "Tana harorati ko'tarilgan. Termoregulyatsiya yuklamasi mavjud."
-          : "Suyak zichligi va tana termoregulyatsiyasi me'yorda. Doza doirasi xavfsiz.",
+        safeRad > 1.5
+          ? "Radiatsiya bo'roni: Dozimetr nurlanish o'sishini qayd etmoqda. Suyak iligiga jiddiy tahdid!"
+          : "Vaznsizlikda suyak zichligi har oyda 1.0-1.5% yo'qotiladi (osteopeniya xavfi). Kunlik 2.5 soat ARED mashqlari talab etiladi.",
       metrics: [
-        { label: "Radiatsiya Foni", value: `${radiationLevel} mSv/h`, normal: "< 0.5 mSv/h", warning: radiationLevel > 1.0 },
-        { label: "Tana Harorati", value: `${bodyTemperature} °C`, normal: "36.5 - 37.2", warning: bodyTemperature > 37.5 },
-        { label: "Jami Doza", value: `${cumulativeDose} mSv`, normal: "< 20 mSv", warning: cumulativeDose > 5.0 },
+        { label: "Radiatsiya Foni", value: radiationLevel !== null && radiationLevel !== undefined ? `${radiationLevel} mSv/h` : "—", normal: "< 0.5 mSv/h", warning: safeRad > 1.0 },
+        { label: "Tana Harorati", value: bodyTemperature !== null && bodyTemperature !== undefined ? `${bodyTemperature} °C` : "—", normal: "36.5 - 37.2", warning: safeTemp > 37.8 || safeTemp < 35.5 },
+        { label: "Kumulyativ Doza", value: cumulativeDose !== null && cumulativeDose !== undefined ? `${cumulativeDose} mSv` : "—", normal: "< 20 mSv", warning: (cumulativeDose ?? 0) > 5.0 },
       ],
+      hazardNote: "NASA Hazard (Gravitatsiya va Radiatsiya): Suyak minerallari yo'qotilishi qonda kaltsiy ortishi va buyrakda tosh paydo bo'lish xavfini kuchaytiradi.",
+      hazardKey: "radiation",
+    },
+    immune: {
+      name: "Immun Tizimi & Qalqon",
+      latin: "Immune Dysregulation & Latent Pathogens",
+      icon: Activity,
+      color: "text-emerald-400",
+      borderColor: "border-emerald-500/40",
+      glowColor: "rgba(16, 185, 129, 0.4)",
+      badgeBg: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+      status: safeTemp > 38.5 || safeRad > 2.0 ? "CRITICAL" : safeTemp > 37.5 ? "WARNING" : "NORMAL",
+      summary:
+        safeTemp > 37.8
+          ? "Tana harorati ko'tarilgan: infeksiya yoki termal regulyatsiya zo'riqishi. Immun javob faollashgan."
+          : "Kosmik parvozda T-hujayralar faolligi pasayishi va latent viruslar (EBV, Herpes) uyg'onishi kuzatiladi.",
+      metrics: [
+        { label: "Tana Harorati", value: bodyTemperature !== null && bodyTemperature !== undefined ? `${bodyTemperature} °C` : "—", normal: "36.5-37.2 °C", warning: safeTemp > 37.8 },
+        { label: "Immun Reaktivlik", value: safeRad > 1.0 ? "Susaygan (-35%)" : "Faol (Normal)", normal: "Normal", warning: safeRad > 1.0 },
+        { label: "Leykotsit Indeksi", value: safeTemp > 37.8 ? "8.8 x10^9/L" : "6.2 x10^9/L", normal: "4.5-11.0", warning: safeTemp > 38.5 },
+      ],
+      hazardNote: "NASA Hazard (Kosmik nurlanish va Izolyatsiya): Radiatsiya va stress gormonlari immun tizimini bostiradi, allergik va autoimmun reaksiyalar xavfi ortadi.",
       hazardKey: "radiation",
     },
   };
@@ -350,6 +387,17 @@ export default function InteractiveAnatomy({
             {active.summary}
           </div>
         </div>
+
+        {/* NASA Hazard Note */}
+        {active.hazardNote && (
+          <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200/90 leading-relaxed font-mono flex items-start gap-2">
+            <Shield className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-amber-300">NASA Hazard: </span>
+              {active.hazardNote}
+            </div>
+          </div>
+        )}
 
         {/* Action Button: Jump to First-Aid / Medical Guide */}
         {onOpenMedGuide && (
